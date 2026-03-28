@@ -1,0 +1,51 @@
+name: Sync Omie → BigQuery
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 5h BRT
+    - cron: '0 15 * * *'  # 12h BRT
+    - cron: '0 21 * * *'  # 18h BRT
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests google-cloud-bigquery db-dtypes
+
+      - name: Authenticate GCP
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "$GCP_SA_KEY" | base64 --decode > /tmp/gcp-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> $GITHUB_ENV
+
+      - name: Sync Omie → BigQuery
+        env:
+          OMIE_APP_KEY: ${{ secrets.OMIE_APP_KEY }}
+          OMIE_APP_SECRET: ${{ secrets.OMIE_APP_SECRET }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          BQ_DATASET: etiquetei
+          PYTHONUNBUFFERED: "1"
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 2
+          retry_wait_seconds: 60
+          command: python omie_sync_bq.py
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/gcp-key.json

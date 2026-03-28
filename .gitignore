@@ -1,0 +1,9 @@
+.env
+env.yaml
+__pycache__/
+*.pyc
+/tmp/
+rh_data.json
+*.enc
+*.xlsx
+.DS_Store
