@@ -354,6 +354,18 @@ tr:hover td{background:rgba(74,144,255,.04)}
           <div class="proj-table" id="contratoDetalhe"></div>
         </div>
       </div>
+      <h3 style="margin:24px 0 14px;color:var(--muted);font-size:16px;font-weight:600">Comissões</h3>
+      <div class="kpi-row" id="kpi-comissoes"></div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1"><h3>Evolução de Comissões <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartComissaoEvo"></canvas></div><p class="chart-note">Comissão paga por mês (data de pagamento). Refere-se aos recebimentos do mês anterior.</p></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Comissões por Vendedor <span class="regime-badge caixa">Caixa</span></h3>
+          <input type="text" class="search-input" id="comissaoBusca" placeholder="🔍 Buscar vendedor..." oninput="filtrarComissoes()">
+          <div class="proj-table" id="comissaoDetalhe"></div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1411,6 +1423,7 @@ function renderVendas(dc){
 function renderClientes(){}
 
 let _contratosAll=[];
+let _comissoesAll=[];
 function renderContratos(){
   const ctr=dadosOriginal.contratos;
   if(!ctr){document.getElementById('kpi-contratos').innerHTML='<div class="empty-state"><p>Sem dados de contratos</p></div>';return}
@@ -1447,6 +1460,52 @@ function renderContratos(){
   // Tabela detalhada
   _contratosAll=ctr.lista||[];
   renderContratosTabela(_contratosAll);
+
+  // ---- COMISSÕES ----
+  if(charts.comEvo){charts.comEvo.destroy();delete charts.comEvo}
+  const comL=dadosFiltrados.lancamentos.filter(l=>{
+    const g=(l.categoria_codigo||'').split('.').slice(0,3).join('.');
+    return g==='2.02.01'&&l.tipo==='saida';
+  });
+
+  // Por mês
+  const comPorMes={};
+  comL.forEach(l=>{const m=toYM(l.data);if(m)comPorMes[m]=(comPorMes[m]||0)+l.valor});
+  const comMeses=Object.keys(comPorMes).sort();
+  const comTotal=comL.reduce((s,l)=>s+l.valor,0);
+  const comMedia=comMeses.length>0?comTotal/comMeses.length:0;
+
+  // KPIs
+  document.getElementById('kpi-comissoes').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Comissões no Período</div><div class="kpi-value" style="color:#FB923C">${fmt(comTotal)}</div><div class="kpi-sub">${comL.length} pagamentos</div></div>
+    <div class="kpi-card"><div class="kpi-label">Comissão Média Mensal</div><div class="kpi-value" style="color:#FB923C">${fmt(comMedia)}</div><div class="kpi-sub">${comMeses.length} meses</div></div>`;
+
+  // Gráfico evolução
+  if(comMeses.length){
+    charts.comEvo=new Chart(document.getElementById('chartComissaoEvo'),{type:'line',
+      data:{labels:comMeses.map(mesNome),datasets:[{label:'Comissão',data:comMeses.map(m=>comPorMes[m]),
+        borderColor:'#FB923C',backgroundColor:'rgba(251,146,60,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#FB923C',borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+                y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+        plugins:{legend:{display:false},
+          datalabels:{display:true,color:'#FB923C',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}
+        }}
+    });
+  }
+
+  // Por vendedor
+  const comPorVendedor={};
+  comL.forEach(l=>{
+    const nome=l.cliente_nome||'Sem nome';
+    if(!comPorVendedor[nome])comPorVendedor[nome]={total:0,count:0,meses:{}};
+    comPorVendedor[nome].total+=l.valor;
+    comPorVendedor[nome].count++;
+    const m=toYM(l.data);
+    if(m)comPorVendedor[nome].meses[m]=(comPorVendedor[nome].meses[m]||0)+l.valor;
+  });
+  _comissoesAll=Object.entries(comPorVendedor).map(([nome,d])=>({nome,total:d.total,count:d.count,mesesCount:Object.keys(d.meses).length,media:Object.keys(d.meses).length>0?d.total/Object.keys(d.meses).length:0})).sort((a,b)=>b.total-a.total);
+  renderComissoesTabela(_comissoesAll);
 }
 
 function renderContratosTabela(lista){
@@ -1472,6 +1531,23 @@ function filtrarContratos(){
   const q=(document.getElementById('contratoBusca').value||'').toLowerCase();
   const filtered=q?_contratosAll.filter(c=>(c.cliente_nome||'').toLowerCase().includes(q)||(c.numero||'').toLowerCase().includes(q)||(c.projeto_nome||'').toLowerCase().includes(q)):_contratosAll;
   renderContratosTabela(filtered);
+}
+
+function renderComissoesTabela(lista){
+  document.getElementById('comissaoDetalhe').innerHTML=`<table><thead><tr>
+    <th>Vendedor</th><th style="text-align:right">Qtd Pagamentos</th><th style="text-align:right">Total</th><th style="text-align:right">Média Mensal</th>
+  </tr></thead><tbody>${lista.map(c=>`<tr>
+    <td>${c.nome}</td>
+    <td style="text-align:right">${c.count}</td>
+    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(c.total)}</td>
+    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--muted)">${fmt(c.media)}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+function filtrarComissoes(){
+  const q=(document.getElementById('comissaoBusca').value||'').toLowerCase();
+  const filtered=q?_comissoesAll.filter(c=>c.nome.toLowerCase().includes(q)):_comissoesAll;
+  renderComissoesTabela(filtered);
 }
 
 // ============ PROJETOS ============
