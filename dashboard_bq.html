@@ -304,11 +304,11 @@ tr:hover td{background:rgba(74,144,255,.04)}
 
       <div class="kpi-row" id="kpi-vendas"></div>
       <div class="chart-row">
-        <div class="chart-card" style="flex:3"><h3>Receita por Linha de Negócio <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasStack"></canvas></div><p class="chart-note">Receitas mensais empilhadas por linha</p></div>
-        <div class="chart-card" style="flex:2"><h3>Composição da Receita Acumulada <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasWaterfall"></canvas></div><p class="chart-note">Waterfall: contribuição de cada linha</p></div>
+        <div class="chart-card" style="flex:3"><h3>Receita por Linha de Negócio <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecStack"></canvas></div><p class="chart-note">Receitas mensais empilhadas por linha</p></div>
+        <div class="chart-card" style="flex:2"><h3>Composição da Receita Acumulada <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecWaterfall"></canvas></div><p class="chart-note">Waterfall: contribuição de cada linha</p></div>
       </div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Receita vs Custo Direto <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasCusto"></canvas></div><p class="chart-note">Margem bruta por linha de negócio</p></div>
+        <div class="chart-card"><h3>Receita vs Custo Direto <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecCusto"></canvas></div><p class="chart-note">Margem bruta por linha de negócio</p></div>
       </div>
       <div class="chart-row">
         <div class="chart-card"><h3>Top Clientes (por Receita) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartTopClientes"></canvas></div><p class="chart-note">Top 10 clientes por valor de entrada no período</p></div>
@@ -718,7 +718,17 @@ function renderSaldoGrid(){
 
 function destroyCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};_allPorMes=null;_allFinMesAll=null}
 
-function renderAll(){destroyCharts();const d=compute();const dc=computeCompetencia();renderVisaoGeral(d,dc);renderFluxoCaixa(d);renderFinanceiro(dc);renderVendas(dc);renderClientes();renderProjetos(dc);renderContratos();renderCobranca()}
+function renderAll(){
+  destroyCharts();const d=compute();const dc=computeCompetencia();
+  try{renderVisaoGeral(d,dc)}catch(e){console.error('renderVisaoGeral',e)}
+  try{renderFluxoCaixa(d)}catch(e){console.error('renderFluxoCaixa',e)}
+  try{renderFinanceiro(dc)}catch(e){console.error('renderFinanceiro',e)}
+  try{renderVendas(dc)}catch(e){console.error('renderVendas',e)}
+  try{renderClientes()}catch(e){console.error('renderClientes',e)}
+  try{renderProjetos(dc)}catch(e){console.error('renderProjetos',e)}
+  try{renderContratos()}catch(e){console.error('renderContratos',e)}
+  try{renderCobranca()}catch(e){console.error('renderCobranca',e)}
+}
 
 Chart.register(ChartDataLabels);
 Chart.defaults.color='#94a3be';
@@ -1365,7 +1375,7 @@ function renderVendas(dc){
     borderColor:info.cor,
     borderWidth:1
   }));
-  charts.recStack=new Chart(document.getElementById('chartReceitasStack'),{type:'bar',
+  charts.recStack=new Chart(document.getElementById('chartRecStack'),{type:'bar',
     data:{labels:meses.map(mesNome),datasets:stackDS},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
@@ -1394,7 +1404,7 @@ function renderVendas(dc){
   wfColors.push('rgba(255,255,255,.15)');
   wfBorders.push('rgba(255,255,255,.4)');
 
-  charts.recWF=new Chart(document.getElementById('chartReceitasWaterfall'),{type:'bar',
+  charts.recWF=new Chart(document.getElementById('chartRecWaterfall'),{type:'bar',
     data:{labels:wfLabels,datasets:[{data:wfData,backgroundColor:wfColors,borderColor:wfBorders,borderWidth:1,borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},
@@ -1417,7 +1427,7 @@ function renderVendas(dc){
     rcMargemLabels.push(rec>0?((rec-custo)/rec*100).toFixed(0)+'%':'--');
   });
 
-  charts.recCusto=new Chart(document.getElementById('chartReceitasCusto'),{type:'bar',
+  charts.recCusto=new Chart(document.getElementById('chartRecCusto'),{type:'bar',
     data:{labels:rcLabels,datasets:[
       {label:'Receita',data:rcRec,backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
       {label:'Custo Direto',data:rcCusto,backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1}
