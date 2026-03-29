@@ -199,6 +199,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
   <button class="tab" data-tab="vendas">Receitas</button>
   <button class="tab" data-tab="projetos">Projetos</button>
   <button class="tab" data-tab="contratos">Contratos</button>
+  <button class="tab" data-tab="cobranca">Cobrança</button>
 </div>
 <div class="content">
   <div id="loadingState" class="empty-state">
@@ -365,6 +366,25 @@ tr:hover td{background:rgba(74,144,255,.04)}
           <input type="text" class="search-input" id="comissaoBusca" placeholder="🔍 Buscar vendedor..." oninput="filtrarComissoes()">
           <div class="proj-table" id="comissaoDetalhe"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- COBRANÇA -->
+    <div class="page" id="page-cobranca">
+      <div class="kpi-row" id="kpi-cobranca"></div>
+      <div style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap" id="cobrancaFiltros">
+        <button class="periodo-btns" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px" onclick="setCobrancaLinha('todas',this)">Todas</button>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Títulos Inadimplentes <span class="regime-badge caixa">Posição Atual</span></h3>
+          <input type="text" class="search-input" id="cobrancaBusca" placeholder="🔍 Buscar cliente..." oninput="filtrarCobranca()">
+          <div class="proj-table" id="cobrancaDetalhe" style="max-height:500px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Inadimplência por Linha <span class="regime-badge caixa">Posição Atual</span></h3><div class="chart-container" style="height:280px"><canvas id="chartCobrancaLinha"></canvas></div></div>
+        <div class="chart-card"><h3>Top Devedores <span class="regime-badge caixa">Posição Atual</span></h3><div class="chart-container" style="height:280px"><canvas id="chartCobrancaClientes"></canvas></div></div>
       </div>
     </div>
 
@@ -698,7 +718,7 @@ function renderSaldoGrid(){
 
 function destroyCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};_allPorMes=null;_allFinMesAll=null}
 
-function renderAll(){destroyCharts();const d=compute();const dc=computeCompetencia();renderVisaoGeral(d,dc);renderFluxoCaixa(d);renderFinanceiro(dc);renderVendas(dc);renderClientes();renderProjetos(dc);renderContratos()}
+function renderAll(){destroyCharts();const d=compute();const dc=computeCompetencia();renderVisaoGeral(d,dc);renderFluxoCaixa(d);renderFinanceiro(dc);renderVendas(dc);renderClientes();renderProjetos(dc);renderContratos();renderCobranca()}
 
 Chart.register(ChartDataLabels);
 Chart.defaults.color='#94a3be';
@@ -1548,6 +1568,119 @@ function filtrarComissoes(){
   const q=(document.getElementById('comissaoBusca').value||'').toLowerCase();
   const filtered=q?_comissoesAll.filter(c=>c.nome.toLowerCase().includes(q)):_comissoesAll;
   renderComissoesTabela(filtered);
+}
+
+// ============ COBRANÇA ============
+const LINHAS_COBRANCA = {
+  '1.01.02': {nome: 'Mensalidade', cor: '#3DDC97'},
+  '1.01.03': {nome: 'Setup', cor: '#4A90FF'},
+  '1.01.99': {nome: 'Etiquetas', cor: '#FFB547'},
+  '1.01.98': {nome: 'Locação', cor: '#A78BFA'},
+  '1.01.01': {nome: 'Comissionamento', cor: '#2DD4BF'},
+};
+let _cobrancaAll=[], _cobrancaLinha='todas';
+
+function renderCobranca(){
+  if(charts.cobLinha){charts.cobLinha.destroy();delete charts.cobLinha}
+  if(charts.cobCli){charts.cobCli.destroy();delete charts.cobCli}
+
+  const hoje=new Date();
+  // Usar dadosOriginal — inadimplência é posição atual
+  _cobrancaAll=(dadosOriginal.lancamentos||[]).filter(l=>l.tipo==='entrada'&&l.status==='ATRASADO').map(l=>{
+    const cat=(l.categoria_codigo||'').split('.').slice(0,3).join('.');
+    const info=LINHAS_COBRANCA[cat];
+    const dv=parseDate(l.data_vencimento);
+    const dias=dv?Math.floor((hoje-dv)/86400000):0;
+    return {cliente:l.cliente_nome||'Sem nome',linha:info?info.nome:'Outros',linhaCat:cat,valor:l.valor,
+      vencimento:l.data_vencimento||'',dias,documento:l.numero_documento||'—',cor:info?info.cor:'#94a3b8'};
+  }).sort((a,b)=>b.valor-a.valor);
+
+  // Build filtro botões
+  const filtrosEl=document.getElementById('cobrancaFiltros');
+  let btnHtml='<button style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px" onclick="setCobrancaLinha(\'todas\',this)">Todas</button>';
+  Object.entries(LINHAS_COBRANCA).forEach(([cat,info])=>{
+    btnHtml+=`<button style="padding:5px 12px;background:var(--bg);color:${info.cor};border:1px solid ${info.cor};border-radius:6px;cursor:pointer;font-size:12px" onclick="setCobrancaLinha('${cat}',this)">${info.nome}</button>`;
+  });
+  filtrosEl.innerHTML=btnHtml;
+
+  _renderCobrancaView();
+}
+
+function setCobrancaLinha(cat,el){
+  _cobrancaLinha=cat;
+  document.querySelectorAll('#cobrancaFiltros button').forEach(b=>{b.style.background='var(--bg)';b.style.color='var(--muted)';b.style.border='1px solid var(--border)'});
+  if(el){el.style.background='var(--accent)';el.style.color='#fff';el.style.border='1px solid var(--accent)'}
+  _renderCobrancaView();
+}
+
+function _renderCobrancaView(){
+  if(charts.cobLinha){charts.cobLinha.destroy();delete charts.cobLinha}
+  if(charts.cobCli){charts.cobCli.destroy();delete charts.cobCli}
+
+  const filtered=_cobrancaLinha==='todas'?_cobrancaAll:_cobrancaAll.filter(t=>t.linhaCat===_cobrancaLinha);
+  const q=(document.getElementById('cobrancaBusca')?.value||'').toLowerCase();
+  const display=q?filtered.filter(t=>t.cliente.toLowerCase().includes(q)):filtered;
+
+  const total=filtered.reduce((s,t)=>s+t.valor,0);
+  const count=filtered.length;
+  const diasMedio=count>0?Math.round(filtered.reduce((s,t)=>s+t.dias,0)/count):0;
+
+  // Maior devedor
+  const porCliente={};
+  filtered.forEach(t=>{porCliente[t.cliente]=(porCliente[t.cliente]||0)+t.valor});
+  const cliSorted=Object.entries(porCliente).sort((a,b)=>b[1]-a[1]);
+  const maiorDevedor=cliSorted.length?cliSorted[0][0]:'—';
+
+  // KPIs
+  document.getElementById('kpi-cobranca').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">Total Inadimplente</div><div class="kpi-value red">${fmt(total)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Títulos Atrasados</div><div class="kpi-value yellow">${fmtNum(count)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Dias Médio de Atraso</div><div class="kpi-value ${diasMedio>90?'red':diasMedio>30?'yellow':'blue'}">${diasMedio}d</div></div>
+    <div class="kpi-card"><div class="kpi-label">Maior Devedor</div><div class="kpi-value" style="font-size:16px;color:var(--text)">${maiorDevedor.substring(0,25)}</div><div class="kpi-sub">${cliSorted.length?fmt(cliSorted[0][1]):''}</div></div>`;
+
+  // Tabela
+  renderCobrancaTabela(display);
+
+  // Donut: por linha de receita
+  const porLinha={};
+  _cobrancaAll.forEach(t=>{porLinha[t.linha]=(porLinha[t.linha]||0)+t.valor});
+  const linhaLabels=Object.keys(porLinha);
+  const linhaVals=Object.values(porLinha);
+  const linhaCores=linhaLabels.map(l=>{const e=Object.values(LINHAS_COBRANCA).find(i=>i.nome===l);return e?e.cor+'aa':'#94a3b888'});
+  charts.cobLinha=new Chart(document.getElementById('chartCobrancaLinha'),{type:'doughnut',
+    data:{labels:linhaLabels,datasets:[{data:linhaVals,backgroundColor:linhaCores}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'50%',
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11}}},
+        datalabels:{display:ctx=>{const d=ctx.dataset.data;const t=d.reduce((a,b)=>a+b,0);return t>0&&d[ctx.dataIndex]/t>0.05},color:'#fff',font:{size:10,weight:600},formatter:v=>fmtK(v)}
+      }}
+  });
+
+  // Bar horizontal: top devedores
+  const topDev=cliSorted.slice(0,15);
+  charts.cobCli=new Chart(document.getElementById('chartCobrancaClientes'),{type:'bar',
+    data:{labels:topDev.map(e=>e[0].substring(0,28)),datasets:[{data:topDev.map(e=>e[1]),backgroundColor:'#FF6B6B88',borderColor:'#FF6B6B',borderWidth:1}]},
+    options:hBarOpts()
+  });
+}
+
+function renderCobrancaTabela(lista){
+  const linhaBadge=t=>`<span style="background:${t.cor}22;color:${t.cor};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">${t.linha}</span>`;
+  document.getElementById('cobrancaDetalhe').innerHTML=`<table><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr>
+    <th>Cliente</th><th>Linha</th><th style="text-align:right">Valor</th><th>Vencimento</th><th style="text-align:right">Dias Atraso</th><th>Documento</th>
+  </tr></thead><tbody>${lista.map(t=>`<tr style="${t.dias>90?'background:rgba(255,107,107,.06)':''}">
+    <td>${t.cliente}</td>
+    <td>${linhaBadge(t)}</td>
+    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--red)">${fmt(t.valor)}</td>
+    <td style="font-size:12px">${t.vencimento}</td>
+    <td style="text-align:right;font-weight:600;color:${t.dias>90?'var(--red)':t.dias>30?'var(--yellow)':'var(--text)'}">${t.dias}d</td>
+    <td style="font-size:12px;color:var(--muted)">${t.documento}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+function filtrarCobranca(){
+  const filtered=_cobrancaLinha==='todas'?_cobrancaAll:_cobrancaAll.filter(t=>t.linhaCat===_cobrancaLinha);
+  const q=(document.getElementById('cobrancaBusca').value||'').toLowerCase();
+  renderCobrancaTabela(q?filtered.filter(t=>t.cliente.toLowerCase().includes(q)):filtered);
 }
 
 // ============ PROJETOS ============
