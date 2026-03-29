@@ -817,12 +817,22 @@ def coletar_contratos(
 ) -> list[dict]:
     """Coleta contratos de serviço do Omie."""
     print("\n📥 Contratos de Serviço...", flush=True)
-    registros = paginar(
-        "servicos/contrato", "ListarContratos",
-        {"apenas_importado_api": "N"},
-        "contratoCadastroArray",
-        max_pages=100,
-    )
+    # API de contratos aceita max 50 por página e retorna em "contratoCadastro"
+    registros = []
+    pagina = 1
+    total_paginas = 1
+    while pagina <= min(total_paginas, 100):
+        data = omie_request("servicos/contrato", "ListarContratos",
+                            {"pagina": pagina, "registros_por_pagina": 50, "apenas_importado_api": "N"})
+        if not data:
+            break
+        total_paginas = data.get("total_de_paginas", 1)
+        items = data.get("contratoCadastro", [])
+        registros.extend(items)
+        if pagina % 5 == 0 or pagina == total_paginas:
+            print(f"  ListarContratos pag {pagina}/{total_paginas} ({len(registros)} contratos)", flush=True)
+        pagina += 1
+        time.sleep(0.1)
 
     contratos: list[dict] = []
     for r in registros:
