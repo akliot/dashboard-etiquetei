@@ -1322,7 +1322,7 @@ function renderVendas(dc){
   Object.entries(CUSTOS_DIRETOS).forEach(([rCat,cCat])=>{custoToReceita[cCat]=rCat});
 
   L.forEach(l=>{
-    const cat=l.categoria_codigo||'';
+    const cat=l.categoria||'';
     const m=toYM(l.data);if(!m)return;
     const grupo=cat.split('.').slice(0,3).join('.');
 
@@ -1446,45 +1446,48 @@ let _contratosAll=[];
 let _comissoesAll=[];
 function renderContratos(){
   const ctr=dadosOriginal.contratos;
-  if(!ctr){document.getElementById('kpi-contratos').innerHTML='<div class="empty-state"><p>Sem dados de contratos</p></div>';return}
-  const mrr=ctr.mrr||0;
-  const ativos=ctr.contratos_ativos||0;
-  const total=ctr.total_contratos||0;
-  const prev12=ctr.previsao_12m||0;
-  document.getElementById('kpi-contratos').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">MRR (Receita Mensal Recorrente)</div><div class="kpi-value green">${fmt(mrr)}</div><div class="kpi-sub">${ativos} contratos ativos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Previsão 12 Meses</div><div class="kpi-value blue">${fmt(prev12)}</div><div class="kpi-sub">baseado em contratos ativos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Total de Contratos</div><div class="kpi-value purple">${fmtNum(total)}</div><div class="kpi-sub">${ativos} ativos, ${total-ativos} inativos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Ticket Médio Mensal</div><div class="kpi-value cyan">${ativos>0?fmt(mrr/ativos):'—'}</div><div class="kpi-sub">por contrato ativo</div></div>`;
+  if(!ctr){
+    document.getElementById('kpi-contratos').innerHTML='<div class="empty-state"><p>Sem dados de contratos</p></div>';
+  } else {
+    const mrr=ctr.mrr||0;
+    const ativos=ctr.contratos_ativos||0;
+    const total=ctr.total_contratos||0;
+    const prev12=ctr.previsao_12m||0;
+    document.getElementById('kpi-contratos').innerHTML=`
+      <div class="kpi-card"><div class="kpi-label">MRR (Receita Mensal Recorrente)</div><div class="kpi-value green">${fmt(mrr)}</div><div class="kpi-sub">${ativos} contratos ativos</div></div>
+      <div class="kpi-card"><div class="kpi-label">Previsão 12 Meses</div><div class="kpi-value blue">${fmt(prev12)}</div><div class="kpi-sub">baseado em contratos ativos</div></div>
+      <div class="kpi-card"><div class="kpi-label">Total de Contratos</div><div class="kpi-value purple">${fmtNum(total)}</div><div class="kpi-sub">${ativos} ativos, ${total-ativos} inativos</div></div>
+      <div class="kpi-card"><div class="kpi-label">Ticket Médio Mensal</div><div class="kpi-value cyan">${ativos>0?fmt(mrr/ativos):'—'}</div><div class="kpi-sub">por contrato ativo</div></div>`;
 
-  // Donut: por status
-  const ps=ctr.por_status||{};
-  const statusLabels=Object.keys(ps);
-  const statusVals=Object.values(ps);
-  const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA'};
-  if(charts.ctrStatus){charts.ctrStatus.destroy();delete charts.ctrStatus}
-  charts.ctrStatus=new Chart(document.getElementById('chartContratosStatus'),{type:'doughnut',data:{
-    labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
-  },options:{...dOpts,cutout:'55%'}});
+    // Donut: por status
+    const ps=ctr.por_status||{};
+    const statusLabels=Object.keys(ps);
+    const statusVals=Object.values(ps);
+    const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA'};
+    if(charts.ctrStatus){charts.ctrStatus.destroy();delete charts.ctrStatus}
+    charts.ctrStatus=new Chart(document.getElementById('chartContratosStatus'),{type:'doughnut',data:{
+      labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
+    },options:{...dOpts,cutout:'55%'}});
 
-  // Horizontal bar: top 10 contratos ativos por valor
-  const listaAtivos=(ctr.lista||[]).filter(c=>c.status_codigo==='10').sort((a,b)=>b.valor_mensal-a.valor_mensal).slice(0,10);
-  if(charts.ctrTop){charts.ctrTop.destroy();delete charts.ctrTop}
-  if(listaAtivos.length){
-    charts.ctrTop=new Chart(document.getElementById('chartContratosTop'),{type:'bar',data:{
-      labels:listaAtivos.map(c=>(c.cliente_nome||c.numero).substring(0,25)),
-      datasets:[{data:listaAtivos.map(c=>c.valor_mensal),backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1}]
-    },options:hBarOpts('currency')});
+    // Horizontal bar: top 10 contratos ativos por valor
+    const listaAtivos=(ctr.lista||[]).filter(c=>c.status_codigo==='10').sort((a,b)=>b.valor_mensal-a.valor_mensal).slice(0,10);
+    if(charts.ctrTop){charts.ctrTop.destroy();delete charts.ctrTop}
+    if(listaAtivos.length){
+      charts.ctrTop=new Chart(document.getElementById('chartContratosTop'),{type:'bar',data:{
+        labels:listaAtivos.map(c=>(c.cliente_nome||c.numero).substring(0,25)),
+        datasets:[{data:listaAtivos.map(c=>c.valor_mensal),backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1}]
+      },options:hBarOpts('currency')});
+    }
+
+    // Tabela detalhada
+    _contratosAll=ctr.lista||[];
+    renderContratosTabela(_contratosAll);
   }
-
-  // Tabela detalhada
-  _contratosAll=ctr.lista||[];
-  renderContratosTabela(_contratosAll);
 
   // ---- COMISSÕES ----
   if(charts.comEvo){charts.comEvo.destroy();delete charts.comEvo}
   const comL=dadosFiltrados.lancamentos.filter(l=>{
-    const g=(l.categoria_codigo||'').split('.').slice(0,3).join('.');
+    const g=(l.categoria||'').split('.').slice(0,3).join('.');
     return g==='2.02.01'&&l.tipo==='saida';
   });
 
@@ -1587,7 +1590,7 @@ function renderCobranca(){
   const hoje=new Date();
   // Usar dadosOriginal — inadimplência é posição atual
   _cobrancaAll=(dadosOriginal.lancamentos||[]).filter(l=>l.tipo==='entrada'&&l.status==='ATRASADO').map(l=>{
-    const cat=(l.categoria_codigo||'').split('.').slice(0,3).join('.');
+    const cat=(l.categoria||'').split('.').slice(0,3).join('.');
     const info=LINHAS_COBRANCA[cat];
     const dv=parseDate(l.data_vencimento);
     const dias=dv?Math.floor((hoje-dv)/86400000):0;
