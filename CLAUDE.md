@@ -93,3 +93,47 @@ Não criar:
 - `extract_rh.py`, `extract_bp_bq.py`
 - `dashboard_rh.html`
 - `dados_*.enc`, `rh_data.*`
+
+## ⚠️ Regras de desenvolvimento — dashboard_bq.html
+
+### Canvas IDs devem ser ÚNICOS
+Cada `<canvas id="...">` deve ter um ID globalmente único no HTML inteiro.
+Abas diferentes NÃO podem compartilhar canvas IDs. O Chart.js dá erro fatal se tentar reusar um canvas sem destruir o chart anterior.
+
+**Convenção de nomes:** prefixo por aba
+- Visão Geral: `spark*` (sparkRecDesp, sparkCaixa...)
+- Fluxo de Caixa: `chartFluxo*` (chartFluxoRecDesp, chartFluxoSaldo...)
+- Financeiro: `chartFin*` (chartFinStack, chartFinResultado...)
+- Receitas: `chartRec*` (chartRecStack, chartRecWaterfall...)
+- Projetos: `chartTopProj*`, `chartMargem*`
+- Contratos: `chartContratos*` (chartContratosStatus, chartContratosTop...)
+- Cobrança: `chartCobranca*`
+
+### renderAll() deve usar try/catch
+Cada render de aba deve estar em try/catch para que o erro de uma aba não quebre as outras:
+```javascript
+try { renderVendas(dc) } catch(e) { console.error('renderVendas', e) }
+```
+
+### Sempre destruir chart antes de recriar
+```javascript
+if (charts.meuChart) { charts.meuChart.destroy(); delete charts.meuChart; }
+charts.meuChart = new Chart(...)
+```
+
+### Testar TODAS as abas após qualquer mudança
+Após modificar o HTML ou JS do dashboard, clicar em cada aba e verificar que renderiza sem erros no console.
+
+## ⚠️ Regras de desenvolvimento — omie_sync_bq.py
+
+### APIs Omie têm page sizes diferentes
+- A maioria das APIs aceita `registros_por_pagina: 200`
+- **Contratos** (`servicos/contrato`) aceita **máximo 50**
+- **Chave da lista de retorno** varia: `contratoCadastro` (não `contratoCadastroArray`)
+- Sempre verificar a doc da API: https://developer.omie.com.br/service-list/
+- Ao adicionar nova coleta, testar o endpoint isoladamente antes de integrar
+
+### Rate limiting
+- A API Omie retorna **403 Forbidden** quando há muitas chamadas em sequência
+- Usar `time.sleep(0.1)` entre chamadas paginadas
+- Testes locais frequentemente dão 403 — usar GitHub Actions para validar
