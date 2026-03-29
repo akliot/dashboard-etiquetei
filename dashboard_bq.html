@@ -346,25 +346,26 @@ tr:hover td{background:rgba(74,144,255,.04)}
       <div class="kpi-row" id="kpi-contratos"></div>
       <div class="chart-row">
         <div class="chart-card"><h3>Contratos por Status</h3><div class="chart-container" style="height:260px"><canvas id="chartContratosStatus"></canvas></div></div>
-        <div class="chart-card"><h3>Top Contratos por Valor Mensal</h3><div class="chart-container" style="height:260px"><canvas id="chartContratosTop"></canvas></div></div>
+        <div class="chart-card"><h3>Faturamento Mensal (Contratos) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container" style="height:260px"><canvas id="chartContratosFat"></canvas></div><p class="chart-note">Receita de contratos ativos por mês (data de início da vigência)</p></div>
       </div>
-      <div class="chart-row">
-        <div class="chart-card" style="grid-column:1/-1">
-          <h3>Detalhamento dos Contratos</h3>
-          <input type="text" class="search-input" id="contratoBusca" placeholder="🔍 Buscar contrato..." oninput="filtrarContratos()">
-          <div class="proj-table" id="contratoDetalhe"></div>
-        </div>
-      </div>
-      <h3 style="margin:24px 0 14px;color:var(--muted);font-size:16px;font-weight:600">Comissões</h3>
+
+      <h3 style="margin:24px 0 14px;color:var(--muted);font-size:16px;font-weight:600">Comissões por Vendedor</h3>
       <div class="kpi-row" id="kpi-comissoes"></div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1"><h3>Evolução de Comissões <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartComissaoEvo"></canvas></div><p class="chart-note">Comissão paga por mês (data de pagamento). Refere-se aos recebimentos do mês anterior.</p></div>
       </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Vendedor:</label>
+          <select id="comissaoVendedorSelect" onchange="setComissaoVendedor(this.value)" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;min-width:250px">
+            <option value="">Todos os vendedores</option>
+          </select>
+        </div>
+      </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
-          <h3>Comissões por Vendedor <span class="regime-badge caixa">Caixa</span></h3>
-          <input type="text" class="search-input" id="comissaoBusca" placeholder="🔍 Buscar vendedor..." oninput="filtrarComissoes()">
-          <div class="proj-table" id="comissaoDetalhe"></div>
+          <h3 id="comissaoTabelaTitulo">Comissões — Todos os Vendedores <span class="regime-badge caixa">Caixa</span></h3>
+          <div class="proj-table" id="comissaoDetalhe" style="max-height:600px;overflow-y:auto"></div>
         </div>
       </div>
     </div>
@@ -1452,8 +1453,9 @@ function renderVendas(dc){
 // ============ CLIENTES ============
 function renderClientes(){}
 
-let _contratosAll=[];
-let _comissoesAll=[];
+let _comissaoVendedor='';
+let _comissaoData=[];  // [{vendedor, meses:{mes:{clientes:{cli:val}, total}}, totalGeral}]
+
 function renderContratos(){
   const ctr=dadosOriginal.contratos;
   if(!ctr){
@@ -1473,50 +1475,55 @@ function renderContratos(){
     const ps=ctr.por_status||{};
     const statusLabels=Object.keys(ps);
     const statusVals=Object.values(ps);
-    const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA'};
+    const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA','90':'#FFB547','99':'#94a3b8'};
     if(charts.ctrStatus){charts.ctrStatus.destroy();delete charts.ctrStatus}
     charts.ctrStatus=new Chart(document.getElementById('chartContratosStatus'),{type:'doughnut',data:{
       labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
     },options:{...dOpts,cutout:'55%'}});
 
-    // Horizontal bar: top 10 contratos ativos por valor
-    const listaAtivos=(ctr.lista||[]).filter(c=>c.status_codigo==='10').sort((a,b)=>b.valor_mensal-a.valor_mensal).slice(0,10);
-    if(charts.ctrTop){charts.ctrTop.destroy();delete charts.ctrTop}
-    if(listaAtivos.length){
-      charts.ctrTop=new Chart(document.getElementById('chartContratosTop'),{type:'bar',data:{
-        labels:listaAtivos.map(c=>(c.cliente_nome||c.numero).substring(0,25)),
-        datasets:[{data:listaAtivos.map(c=>c.valor_mensal),backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1}]
-      },options:hBarOpts('currency')});
+    // Faturamento mensal de contratos (receita 1.01.* por mês, regime caixa)
+    if(charts.ctrFat){charts.ctrFat.destroy();delete charts.ctrFat}
+    const fatMes={};
+    dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')).forEach(l=>{
+      const m=toYM(l.data);if(m)fatMes[m]=(fatMes[m]||0)+l.valor;
+    });
+    const fatMeses=Object.keys(fatMes).sort();
+    if(fatMeses.length){
+      charts.ctrFat=new Chart(document.getElementById('chartContratosFat'),{type:'bar',
+        data:{labels:fatMeses.map(mesNome),datasets:[{data:fatMeses.map(m=>fatMes[m]),backgroundColor:'#3DDC9788',borderColor:'#3DDC97',borderWidth:1,borderRadius:4}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+          plugins:{legend:{display:false},datalabels:{display:true,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}}}
+      });
     }
-
-    // Tabela detalhada
-    _contratosAll=ctr.lista||[];
-    renderContratosTabela(_contratosAll);
   }
 
-  // ---- COMISSÕES ----
+  // ---- COMISSÕES POR VENDEDOR (fluxo de caixa style) ----
   if(charts.comEvo){charts.comEvo.destroy();delete charts.comEvo}
+
+  // Coletar comissões do período filtrado
   const comL=dadosFiltrados.lancamentos.filter(l=>{
     const g=(l.categoria||'').split('.').slice(0,3).join('.');
     return g==='2.02.01'&&l.tipo==='saida';
   });
 
-  // Por mês
-  const comPorMes={};
-  comL.forEach(l=>{const m=toYM(l.data);if(m)comPorMes[m]=(comPorMes[m]||0)+l.valor});
-  const comMeses=Object.keys(comPorMes).sort();
   const comTotal=comL.reduce((s,l)=>s+l.valor,0);
+  const comPorMesTotal={};
+  comL.forEach(l=>{const m=toYM(l.data);if(m)comPorMesTotal[m]=(comPorMesTotal[m]||0)+l.valor});
+  const comMeses=Object.keys(comPorMesTotal).sort();
   const comMedia=comMeses.length>0?comTotal/comMeses.length:0;
+  const vendedores=new Set();comL.forEach(l=>vendedores.add(l.cliente_nome||'Sem nome'));
 
   // KPIs
   document.getElementById('kpi-comissoes').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Comissões no Período</div><div class="kpi-value" style="color:#FB923C">${fmt(comTotal)}</div><div class="kpi-sub">${comL.length} pagamentos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Comissão Média Mensal</div><div class="kpi-value" style="color:#FB923C">${fmt(comMedia)}</div><div class="kpi-sub">${comMeses.length} meses</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Comissão Média Mensal</div><div class="kpi-value" style="color:#FB923C">${fmt(comMedia)}</div><div class="kpi-sub">${comMeses.length} meses</div></div>
+    <div class="kpi-card"><div class="kpi-label">Vendedores</div><div class="kpi-value blue">${vendedores.size}</div><div class="kpi-sub">com comissão no período</div></div>`;
 
   // Gráfico evolução
   if(comMeses.length){
     charts.comEvo=new Chart(document.getElementById('chartComissaoEvo'),{type:'line',
-      data:{labels:comMeses.map(mesNome),datasets:[{label:'Comissão',data:comMeses.map(m=>comPorMes[m]),
+      data:{labels:comMeses.map(mesNome),datasets:[{label:'Comissão',data:comMeses.map(m=>comPorMesTotal[m]),
         borderColor:'#FB923C',backgroundColor:'rgba(251,146,60,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#FB923C',borderWidth:2}]},
       options:{responsive:true,maintainAspectRatio:false,
         scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
@@ -1527,60 +1534,116 @@ function renderContratos(){
     });
   }
 
-  // Por vendedor
-  const comPorVendedor={};
-  comL.forEach(l=>{
-    const nome=l.cliente_nome||'Sem nome';
-    if(!comPorVendedor[nome])comPorVendedor[nome]={total:0,count:0,meses:{}};
-    comPorVendedor[nome].total+=l.valor;
-    comPorVendedor[nome].count++;
-    const m=toYM(l.data);
-    if(m)comPorVendedor[nome].meses[m]=(comPorVendedor[nome].meses[m]||0)+l.valor;
+  // Estruturar dados: por vendedor → por mês → por cliente
+  // Usar TODOS os lançamentos de receita (1.01.*) para cruzar com comissões
+  const recPorCliente={};
+  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')).forEach(l=>{
+    const cli=l.cliente_nome||'';
+    const m=toYM(l.data);if(!m)return;
+    if(!recPorCliente[cli])recPorCliente[cli]={};
+    recPorCliente[cli][m]=(recPorCliente[cli][m]||0)+l.valor;
   });
-  _comissoesAll=Object.entries(comPorVendedor).map(([nome,d])=>({nome,total:d.total,count:d.count,mesesCount:Object.keys(d.meses).length,media:Object.keys(d.meses).length>0?d.total/Object.keys(d.meses).length:0})).sort((a,b)=>b.total-a.total);
-  renderComissoesTabela(_comissoesAll);
+
+  // Comissões: vendedor → mês → valor
+  const comData={};
+  comL.forEach(l=>{
+    const v=l.cliente_nome||'Sem nome';
+    const m=toYM(l.data);if(!m)return;
+    if(!comData[v])comData[v]={meses:{},total:0};
+    if(!comData[v].meses[m])comData[v].meses[m]=0;
+    comData[v].meses[m]+=l.valor;
+    comData[v].total+=l.valor;
+  });
+  _comissaoData=comData;
+
+  // Populate vendedor select
+  const sel=document.getElementById('comissaoVendedorSelect');
+  const sortedVendedores=[...vendedores].sort((a,b)=>(comData[b]?.total||0)-(comData[a]?.total||0));
+  sel.innerHTML='<option value="">Todos os vendedores</option>'+sortedVendedores.map(v=>`<option value="${v}" ${v===_comissaoVendedor?'selected':''}>${v} (${fmt(comData[v]?.total||0)})</option>`).join('');
+
+  renderComissaoView();
 }
 
-function renderContratosTabela(lista){
-  const statusBadge=s=>{
-    const cc={'Ativo':'background:rgba(61,220,151,.15);color:#3DDC97','Cancelado':'background:rgba(255,107,107,.15);color:#FF6B6B','Suspenso':'background:rgba(255,181,71,.15);color:#FFB547','Encerrado':'background:rgba(148,163,190,.15);color:#94a3be','Renovado':'background:rgba(167,139,250,.15);color:#A78BFA'};
-    return `<span style="${cc[s]||''};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">${s}</span>`;
-  };
-  document.getElementById('contratoDetalhe').innerHTML=`<table><thead><tr>
-    <th>Nº Contrato</th><th>Cliente</th><th>Status</th><th style="text-align:right">Valor Mensal</th>
-    <th>Vigência</th><th>Categoria</th><th>Projeto</th>
-  </tr></thead><tbody>${lista.map(c=>`<tr>
-    <td>${c.numero||'—'}</td>
-    <td>${c.cliente_nome||'—'}</td>
-    <td>${statusBadge(c.status)}</td>
-    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${c.status_codigo==='10'?'var(--green)':'var(--muted)'}">${fmt(c.valor_mensal)}</td>
-    <td style="font-size:12px">${c.vigencia_inicio||'—'} → ${c.vigencia_fim||'—'}</td>
-    <td style="font-size:12px">${c.categoria||'—'}</td>
-    <td style="font-size:12px">${c.projeto_nome||'—'}</td>
-  </tr>`).join('')}</tbody></table>`;
+function setComissaoVendedor(v){
+  _comissaoVendedor=v;
+  renderComissaoView();
 }
 
-function filtrarContratos(){
-  const q=(document.getElementById('contratoBusca').value||'').toLowerCase();
-  const filtered=q?_contratosAll.filter(c=>(c.cliente_nome||'').toLowerCase().includes(q)||(c.numero||'').toLowerCase().includes(q)||(c.projeto_nome||'').toLowerCase().includes(q)):_contratosAll;
-  renderContratosTabela(filtered);
-}
+function renderComissaoView(){
+  const tituloEl=document.getElementById('comissaoTabelaTitulo');
+  const detalheEl=document.getElementById('comissaoDetalhe');
 
-function renderComissoesTabela(lista){
-  document.getElementById('comissaoDetalhe').innerHTML=`<table><thead><tr>
-    <th>Vendedor</th><th style="text-align:right">Qtd Pagamentos</th><th style="text-align:right">Total</th><th style="text-align:right">Média Mensal</th>
-  </tr></thead><tbody>${lista.map(c=>`<tr>
-    <td>${c.nome}</td>
-    <td style="text-align:right">${c.count}</td>
-    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(c.total)}</td>
-    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--muted)">${fmt(c.media)}</td>
-  </tr>`).join('')}</tbody></table>`;
-}
+  if(!_comissaoVendedor){
+    // Visão geral: tabela de todos os vendedores com meses
+    tituloEl.innerHTML='Comissões — Todos os Vendedores <span class="regime-badge caixa">Caixa</span>';
+    const vendedores=Object.entries(_comissaoData).sort((a,b)=>b[1].total-a[1].total);
+    const allMeses=new Set();
+    vendedores.forEach(([v,d])=>Object.keys(d.meses).forEach(m=>allMeses.add(m)));
+    const meses=[...allMeses].sort();
 
-function filtrarComissoes(){
-  const q=(document.getElementById('comissaoBusca').value||'').toLowerCase();
-  const filtered=q?_comissoesAll.filter(c=>c.nome.toLowerCase().includes(q)):_comissoesAll;
-  renderComissoesTabela(filtered);
+    let h='<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Vendedor</th>';
+    meses.forEach(m=>{h+=`<th style="text-align:right;font-size:10px">${mesNome(m)}</th>`});
+    h+='<th style="text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
+    vendedores.forEach(([v,d])=>{
+      h+=`<tr style="cursor:pointer" onclick="document.getElementById('comissaoVendedorSelect').value='${v.replace(/'/g,"\\'")}';setComissaoVendedor('${v.replace(/'/g,"\\'")}')">`;
+      h+=`<td style="white-space:nowrap;font-weight:500">${v.substring(0,30)}</td>`;
+      meses.forEach(m=>{const val=d.meses[m]||0;h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${val?'#FB923C':'var(--border)'}">${val?fmt(val):'—'}</td>`});
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:#FB923C">${fmt(d.total)}</td></tr>`;
+    });
+    // Totals row
+    h+='<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td>';
+    meses.forEach(m=>{const t=vendedores.reduce((s,[v,d])=>s+(d.meses[m]||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
+    const grandTotal=vendedores.reduce((s,[v,d])=>s+d.total,0);
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(grandTotal)}</td></tr>`;
+    h+='</tbody></table>';
+    detalheEl.innerHTML=h;
+  } else {
+    // Visão individual: fluxo de caixa do vendedor com clientes como linhas
+    const v=_comissaoVendedor;
+    const d=_comissaoData[v];
+    if(!d){detalheEl.innerHTML='<p style="color:var(--muted);padding:20px">Sem dados para este vendedor.</p>';return}
+
+    tituloEl.innerHTML=`Comissões — ${v} <span class="regime-badge caixa">Caixa</span> <span style="font-size:14px;color:#FB923C;font-weight:700;margin-left:12px">${fmt(d.total)}</span>`;
+
+    // Pegar os lançamentos de comissão deste vendedor com detalhe
+    const comL=dadosFiltrados.lancamentos.filter(l=>{
+      const g=(l.categoria||'').split('.').slice(0,3).join('.');
+      return g==='2.02.01'&&l.tipo==='saida'&&l.cliente_nome===v;
+    });
+
+    const meses=Object.keys(d.meses).sort();
+
+    // Mostrar evolução mês a mês com valor
+    let h=`<div style="margin-bottom:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">Resumo para enviar ao vendedor</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;line-height:2">`;
+    meses.forEach(m=>{
+      h+=`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0">
+        <span style="color:var(--muted)">${mesNome(m)}</span>
+        <span style="color:#FB923C;font-weight:600">${fmt(d.meses[m])}</span>
+      </div>`;
+    });
+    h+=`<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid var(--accent);margin-top:4px">
+        <span style="font-weight:700">TOTAL A RECEBER</span>
+        <span style="color:#FB923C;font-weight:700;font-size:16px">${fmt(d.total)}</span>
+      </div>`;
+    h+='</div></div>';
+
+    // Tabela detalhada: cada pagamento
+    h+=`<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr>
+      <th>Mês Ref.</th><th style="text-align:right">Valor</th><th>Data Pagamento</th>
+    </tr></thead><tbody>`;
+    comL.sort((a,b)=>(a.data_vencimento||a.data).localeCompare(b.data_vencimento||b.data)).forEach(l=>{
+      const m=toYM(l.data);
+      h+=`<tr>
+        <td>${m?mesNome(m):'—'}</td>
+        <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(l.valor)}</td>
+        <td style="font-size:12px;color:var(--muted)">${l.data||'—'}</td>
+      </tr>`;
+    });
+    h+='</tbody></table>';
+    detalheEl.innerHTML=h;
+  }
 }
 
 // ============ COBRANÇA ============
