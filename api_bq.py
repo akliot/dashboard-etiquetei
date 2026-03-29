@@ -356,6 +356,50 @@ def build_json() -> dict:
     if orcamento:
         result["orcamento"] = orcamento
 
+    # ---- Contratos de Serviço ----
+    try:
+        ctr_rows = query_rows(f"""
+            SELECT contrato_id, numero_contrato, status_codigo, status_nome,
+                   valor_mensal, cliente_id, cliente_nome,
+                   vigencia_inicio, vigencia_fim, tipo_faturamento,
+                   dia_faturamento, categoria_codigo, projeto_id, projeto_nome
+            FROM {tbl('contratos')}
+            ORDER BY valor_mensal DESC
+        """)
+        if ctr_rows:
+            contratos_list = []
+            mrr = 0.0
+            por_status: dict[str, int] = defaultdict(int)
+            for r in ctr_rows:
+                status = r.get("status_nome", "")
+                val_mensal = float(r.get("valor_mensal", 0) or 0)
+                por_status[status] += 1
+                if r.get("status_codigo") == "10":  # Ativo
+                    mrr += val_mensal
+                contratos_list.append({
+                    "id": r["contrato_id"],
+                    "numero": r.get("numero_contrato", ""),
+                    "status": status,
+                    "status_codigo": r.get("status_codigo", ""),
+                    "valor_mensal": val_mensal,
+                    "cliente_nome": r.get("cliente_nome", ""),
+                    "vigencia_inicio": date_to_ddmmyyyy(r.get("vigencia_inicio")),
+                    "vigencia_fim": date_to_ddmmyyyy(r.get("vigencia_fim")),
+                    "categoria": r.get("categoria_codigo", ""),
+                    "projeto_nome": r.get("projeto_nome", ""),
+                })
+            ativos = por_status.get("Ativo", 0)
+            result["contratos"] = {
+                "mrr": mrr,
+                "previsao_12m": mrr * 12,
+                "total_contratos": len(ctr_rows),
+                "contratos_ativos": ativos,
+                "por_status": dict(por_status),
+                "lista": contratos_list,
+            }
+    except Exception:
+        pass  # Tabela pode não existir ainda
+
     return result
 
 

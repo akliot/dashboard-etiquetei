@@ -198,6 +198,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
   <button class="tab" data-tab="financeiro">Financeiro</button>
   <button class="tab" data-tab="vendas">Vendas</button>
   <button class="tab" data-tab="projetos">Projetos</button>
+  <button class="tab" data-tab="contratos">Contratos</button>
 </div>
 <div class="content">
   <div id="loadingState" class="empty-state">
@@ -332,6 +333,22 @@ tr:hover td{background:rgba(74,144,255,.04)}
           <input type="text" class="search-input" id="projetoBusca" placeholder="🔍 Buscar projeto..." oninput="filtrarProjetos()">
           <div class="proj-table" id="projetoDetalhe"></div>
           <p class="chart-note">Competência, dados all-time</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRATOS -->
+    <div class="page" id="page-contratos">
+      <div class="kpi-row" id="kpi-contratos"></div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Contratos por Status</h3><div class="chart-container" style="height:260px"><canvas id="chartContratosStatus"></canvas></div></div>
+        <div class="chart-card"><h3>Top Contratos por Valor Mensal</h3><div class="chart-container" style="height:260px"><canvas id="chartContratosTop"></canvas></div></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Detalhamento dos Contratos</h3>
+          <input type="text" class="search-input" id="contratoBusca" placeholder="🔍 Buscar contrato..." oninput="filtrarContratos()">
+          <div class="proj-table" id="contratoDetalhe"></div>
         </div>
       </div>
     </div>
@@ -666,7 +683,7 @@ function renderSaldoGrid(){
 
 function destroyCharts(){Object.values(charts).forEach(c=>c.destroy());charts={};_allPorMes=null;_allFinMesAll=null}
 
-function renderAll(){destroyCharts();const d=compute();const dc=computeCompetencia();renderVisaoGeral(d,dc);renderFluxoCaixa(d);renderFinanceiro(dc);renderVendas(dc);renderClientes();renderProjetos(dc)}
+function renderAll(){destroyCharts();const d=compute();const dc=computeCompetencia();renderVisaoGeral(d,dc);renderFluxoCaixa(d);renderFinanceiro(dc);renderVendas(dc);renderClientes();renderProjetos(dc);renderContratos()}
 
 Chart.register(ChartDataLabels);
 Chart.defaults.color='#94a3be';
@@ -1275,6 +1292,70 @@ function renderVendas(d){
 
 // ============ CLIENTES ============
 function renderClientes(){}
+
+let _contratosAll=[];
+function renderContratos(){
+  const ctr=dadosOriginal.contratos;
+  if(!ctr){document.getElementById('kpi-contratos').innerHTML='<div class="empty-state"><p>Sem dados de contratos</p></div>';return}
+  const mrr=ctr.mrr||0;
+  const ativos=ctr.contratos_ativos||0;
+  const total=ctr.total_contratos||0;
+  const prev12=ctr.previsao_12m||0;
+  document.getElementById('kpi-contratos').innerHTML=`
+    <div class="kpi-card"><div class="kpi-label">MRR (Receita Mensal Recorrente)</div><div class="kpi-value green">${fmt(mrr)}</div><div class="kpi-sub">${ativos} contratos ativos</div></div>
+    <div class="kpi-card"><div class="kpi-label">Previsão 12 Meses</div><div class="kpi-value blue">${fmt(prev12)}</div><div class="kpi-sub">baseado em contratos ativos</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total de Contratos</div><div class="kpi-value purple">${fmtNum(total)}</div><div class="kpi-sub">${ativos} ativos, ${total-ativos} inativos</div></div>
+    <div class="kpi-card"><div class="kpi-label">Ticket Médio Mensal</div><div class="kpi-value cyan">${ativos>0?fmt(mrr/ativos):'—'}</div><div class="kpi-sub">por contrato ativo</div></div>`;
+
+  // Donut: por status
+  const ps=ctr.por_status||{};
+  const statusLabels=Object.keys(ps);
+  const statusVals=Object.values(ps);
+  const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA'};
+  if(charts.ctrStatus){charts.ctrStatus.destroy();delete charts.ctrStatus}
+  charts.ctrStatus=new Chart(document.getElementById('chartContratosStatus'),{type:'doughnut',data:{
+    labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
+  },options:{...dOpts,cutout:'55%'}});
+
+  // Horizontal bar: top 10 contratos ativos por valor
+  const listaAtivos=(ctr.lista||[]).filter(c=>c.status_codigo==='10').sort((a,b)=>b.valor_mensal-a.valor_mensal).slice(0,10);
+  if(charts.ctrTop){charts.ctrTop.destroy();delete charts.ctrTop}
+  if(listaAtivos.length){
+    charts.ctrTop=new Chart(document.getElementById('chartContratosTop'),{type:'bar',data:{
+      labels:listaAtivos.map(c=>(c.cliente_nome||c.numero).substring(0,25)),
+      datasets:[{data:listaAtivos.map(c=>c.valor_mensal),backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1}]
+    },options:hBarOpts('currency')});
+  }
+
+  // Tabela detalhada
+  _contratosAll=ctr.lista||[];
+  renderContratosTabela(_contratosAll);
+}
+
+function renderContratosTabela(lista){
+  const statusBadge=s=>{
+    const cc={'Ativo':'background:rgba(61,220,151,.15);color:#3DDC97','Cancelado':'background:rgba(255,107,107,.15);color:#FF6B6B','Suspenso':'background:rgba(255,181,71,.15);color:#FFB547','Encerrado':'background:rgba(148,163,190,.15);color:#94a3be','Renovado':'background:rgba(167,139,250,.15);color:#A78BFA'};
+    return `<span style="${cc[s]||''};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">${s}</span>`;
+  };
+  document.getElementById('contratoDetalhe').innerHTML=`<table><thead><tr>
+    <th>Nº Contrato</th><th>Cliente</th><th>Status</th><th style="text-align:right">Valor Mensal</th>
+    <th>Vigência</th><th>Categoria</th><th>Projeto</th>
+  </tr></thead><tbody>${lista.map(c=>`<tr>
+    <td>${c.numero||'—'}</td>
+    <td>${c.cliente_nome||'—'}</td>
+    <td>${statusBadge(c.status)}</td>
+    <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${c.status_codigo==='10'?'var(--green)':'var(--muted)'}">${fmt(c.valor_mensal)}</td>
+    <td style="font-size:12px">${c.vigencia_inicio||'—'} → ${c.vigencia_fim||'—'}</td>
+    <td style="font-size:12px">${c.categoria||'—'}</td>
+    <td style="font-size:12px">${c.projeto_nome||'—'}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+function filtrarContratos(){
+  const q=(document.getElementById('contratoBusca').value||'').toLowerCase();
+  const filtered=q?_contratosAll.filter(c=>(c.cliente_nome||'').toLowerCase().includes(q)||(c.numero||'').toLowerCase().includes(q)||(c.projeto_nome||'').toLowerCase().includes(q)):_contratosAll;
+  renderContratosTabela(filtered);
+}
 
 // ============ PROJETOS ============
 function renderProjetos(dc){

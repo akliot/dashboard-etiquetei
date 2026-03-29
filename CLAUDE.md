@@ -70,20 +70,19 @@ NUNCA perguntar "quer commitar?" ou "quer que eu faça push?" — sempre fazer a
 | Projetos | Competência | KPIs, scatter margem, barras, tabela detalhada |
 | Vendas e Clientes | Caixa | Vendas por mês/etapa, top clientes/projetos |
 
-## Status da implementação (atualizado 28/03/2026)
+## Status da implementação (atualizado 29/03/2026)
 
 ### ✅ Concluído
-- **Repo** criado com estrutura base
-- **BigQuery**: dataset `etiquetei` criado, primeiro sync executado (2.542 lançamentos, 233 projetos, 305 clientes, 108 categorias, 36 vendas, 6 contas)
-- **`omie_sync_bq.py`**: adaptado (CONTAS_IGNORAR vazio, is_faturamento_direto=False, default=etiquetei, cat_cod forçado como str)
-- **`api_bq.py`**: adaptado (default=etiquetei, CORS OK)
-- **`dashboard_bq.html`**: branding Etiquetei, 5 abas (removidas: Conciliação FD, Real vs Orçado, RH), sem Headcount/mini DRE, senha=etiquetei2026
-- **`deploy_api.sh`**: pronto para deploy
+- **Repo**: `~/dashboard-etiquetei/` → GitHub `akliot/dashboard-etiquetei` (private)
+- **BigQuery**: dataset `etiquetei` — 10 tabelas, 2.542 lançamentos, 233 projetos, 305 clientes
+- **`omie_sync_bq.py`**: adaptado (CONTAS_IGNORAR vazio, is_faturamento_direto=False, cat_cod str)
+- **`api_bq.py`**: Cloud Function `api-etiquetei` deployada e retornando dados
+- **`dashboard_bq.html`**: branding Etiquetei, 5 abas, senha=etiquetei2026
+- **GitHub Secrets**: 5/5 configurados (OMIE_APP_KEY/SECRET, GCP_PROJECT_ID, GCP_SA_KEY, BQ_DATASET)
+- **GitHub Pages**: ativado em https://akliot.github.io/dashboard-etiquetei/
+- **GitHub Actions**: `sync_omie_bq.yml` — sync 3x/dia, primeiro run via Actions com sucesso
 
-### ❌ Pendente
-- Deploy da Cloud Function `api-etiquetei` (rodar `bash deploy_api.sh`)
-- Criar repo no GitHub + configurar secrets + ativar Pages
-- Criar `.github/workflows/sync_omie_bq.yml` (sync 3x/dia)
+### ⏳ Pendente (menor prioridade)
 - Identidade visual (cores ainda são do Koti)
 - Adaptar `test_pipeline.py` e `test_api.py`
 

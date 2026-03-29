@@ -116,6 +116,17 @@ def ensure_tables(client: bigquery.Client) -> None:
             valor_real FLOAT64, valor_bp FLOAT64, variacao_pct FLOAT64,
             mes_com_real BOOL, sync_timestamp TIMESTAMP
         )""",
+        f"""CREATE TABLE IF NOT EXISTS `{ds_ref}.contratos` (
+            contrato_id INT64, numero_contrato STRING,
+            status_codigo STRING, status_nome STRING,
+            valor_mensal FLOAT64,
+            cliente_id INT64, cliente_nome STRING,
+            vigencia_inicio DATE, vigencia_fim DATE,
+            tipo_faturamento STRING, dia_faturamento INT64,
+            categoria_codigo STRING,
+            projeto_id INT64, projeto_nome STRING,
+            sync_timestamp TIMESTAMP, sync_date DATE
+        )""",
         f"""CREATE OR REPLACE VIEW `{ds_ref}.v_historico_saldos` AS
         SELECT * EXCEPT(rn) FROM (
             SELECT *, ROW_NUMBER() OVER (
@@ -792,6 +803,65 @@ def coletar_vendas_bq(sync_ts: str, sync_date: str) -> list[dict]:
     return vendas
 
 
+STATUS_CONTRATO_MAP = {
+    "10": "Ativo", "20": "Cancelado", "30": "Suspenso",
+    "40": "Encerrado", "50": "Renovado",
+}
+
+
+def coletar_contratos(
+    cli_map: dict[int, str],
+    proj_map: dict[int, str],
+    sync_ts: str,
+    sync_date: str,
+) -> list[dict]:
+    """Coleta contratos de serviço do Omie."""
+    print("\n📥 Contratos de Serviço...", flush=True)
+    registros = paginar(
+        "servicos/contrato", "ListarContratos",
+        {"apenas_importado_api": "N"},
+        "contratoCadastroArray",
+        max_pages=100,
+    )
+
+    contratos: list[dict] = []
+    for r in registros:
+        cab = r.get("cabecalho", {})
+        info = r.get("infAdic", {})
+
+        contrato_id = cab.get("nCodCtr")
+        if not contrato_id:
+            continue
+
+        status_cod = str(cab.get("cCodSit", ""))
+        cli_id = cab.get("nCodCli")
+        proj_id = info.get("nCodProj")
+
+        contratos.append({
+            "contrato_id": contrato_id,
+            "numero_contrato": cab.get("cNumCtr", ""),
+            "status_codigo": status_cod,
+            "status_nome": STATUS_CONTRATO_MAP.get(status_cod, status_cod),
+            "valor_mensal": float(cab.get("nValTotMes", 0) or 0),
+            "cliente_id": cli_id,
+            "cliente_nome": cli_map.get(cli_id, "") if cli_id else "",
+            "vigencia_inicio": parse_date(cab.get("dVigInicial", "")),
+            "vigencia_fim": parse_date(cab.get("dVigFinal", "")),
+            "tipo_faturamento": cab.get("cTipoFat", ""),
+            "dia_faturamento": int(cab.get("nDiaFat", 0) or 0),
+            "categoria_codigo": info.get("cCodCateg", ""),
+            "projeto_id": proj_id if proj_id else None,
+            "projeto_nome": proj_map.get(proj_id, "") if proj_id else None,
+            "sync_timestamp": sync_ts,
+            "sync_date": sync_date,
+        })
+
+    ativos = sum(1 for c in contratos if c["status_codigo"] == "10")
+    mrr = sum(c["valor_mensal"] for c in contratos if c["status_codigo"] == "10")
+    print(f"  ✅ {len(contratos)} contratos ({ativos} ativos, MRR: R$ {mrr:,.2f})")
+    return contratos
+
+
 # ============================================================
 # SYNC LOG
 # ============================================================
@@ -934,6 +1004,7 @@ def main() -> None:
         lancamentos = coletar_lancamentos(cat_map, proj_map, cli_map, sync_ts, sync_date, mf_datas)
         clientes_bq = coletar_clientes_bq(clientes_raw, sync_ts)
         vendas = coletar_vendas_bq(sync_ts, sync_date)
+        contratos = coletar_contratos(cli_map, proj_map, sync_ts, sync_date)
 
         # ---- Proteção contra dados vazios ----
         if not lancamentos and not saldos:
@@ -994,6 +1065,9 @@ def main() -> None:
         # Vendas — TRUNCATE (explode por item, não tem key estável)
         load_to_bq(client, "vendas_pedidos", vendas, "WRITE_TRUNCATE")
 
+        # Contratos — TRUNCATE (poucos registros, snapshot)
+        load_to_bq(client, "contratos", contratos, "WRITE_TRUNCATE")
+
         # Histórico — APPEND (dedup via view)
         load_to_bq(client, "historico_saldos", historico, "WRITE_APPEND")
 
@@ -1023,6 +1097,7 @@ def main() -> None:
         print(f"   Projetos: {counts.get('projetos', 0)}")
         print(f"   Clientes: {counts.get('clientes', 0)}")
         print(f"   Vendas: {len(vendas)}")
+        print(f"   Contratos: {len(contratos)}")
         print(f"   ⏱ Tempo total: {elapsed:.0f}s ({elapsed/60:.1f}min)")
         print("=" * 50)
 
