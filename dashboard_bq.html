@@ -196,7 +196,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
   <button class="tab active" data-tab="visao-geral">Visão Geral</button>
   <button class="tab" data-tab="fluxo-caixa">Fluxo de Caixa</button>
   <button class="tab" data-tab="financeiro">Financeiro</button>
-  <button class="tab" data-tab="vendas">Vendas</button>
+  <button class="tab" data-tab="vendas">Receitas</button>
   <button class="tab" data-tab="projetos">Projetos</button>
   <button class="tab" data-tab="contratos">Contratos</button>
 </div>
@@ -298,17 +298,20 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
     </div>
 
-    <!-- VENDAS -->
+    <!-- RECEITAS -->
     <div class="page" id="page-vendas">
 
       <div class="kpi-row" id="kpi-vendas"></div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Vendas por Mês <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartVendasMes"></canvas></div><p class="chart-note">Competência (data de vencimento)</p></div>
-        <div class="chart-card"><h3>Pedidos por Etapa <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartEtapas"></canvas></div><p class="chart-note">Pipeline de vendas atual</p></div>
+        <div class="chart-card" style="flex:3"><h3>Receita por Linha de Negócio <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasStack"></canvas></div><p class="chart-note">Receitas mensais empilhadas por linha</p></div>
+        <div class="chart-card" style="flex:2"><h3>Composição da Receita Acumulada <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasWaterfall"></canvas></div><p class="chart-note">Waterfall: contribuição de cada linha</p></div>
       </div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Top Clientes (por Receita) <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartTopClientes"></canvas></div><p class="chart-note">Top 10 clientes por valor de entrada no período</p></div>
-        <div class="chart-card"><h3>Top Projetos (por Receita) <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartTopProjVendas"></canvas></div><p class="chart-note">Top 10 projetos por valor de entrada no período</p></div>
+        <div class="chart-card"><h3>Receita vs Custo Direto <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasCusto"></canvas></div><p class="chart-note">Margem bruta por linha de negócio</p></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Top Clientes (por Receita) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartTopClientes"></canvas></div><p class="chart-note">Top 10 clientes por valor de entrada no período</p></div>
+        <div class="chart-card"><h3>Top Projetos (por Receita) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartTopProjVendas"></canvas></div><p class="chart-note">Top 10 projetos por valor de entrada no período</p></div>
       </div>
     </div>
 
@@ -1259,34 +1262,148 @@ function renderFinanceiro(d){
   },options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8'}},datalabels:dlCurrency}}});
 }
 
-// ============ VENDAS ============
-function renderVendas(d){
-  // Usar dados filtrados dos lançamentos para vendas
-  const ent=d.ent;
-  const totalVendas=d.tE;
-  const porMes=d.porMes;
-  const meses=Object.keys(porMes).sort();
-  const nMeses=Math.max(meses.length,1);
+// ============ RECEITAS ============
+const LINHAS_RECEITA = {
+  '1.01.02': {nome: 'Mensalidade', cor: '#3DDC97'},
+  '1.01.03': {nome: 'Setup', cor: '#4A90FF'},
+  '1.01.99': {nome: 'Etiquetas', cor: '#FFB547'},
+  '1.01.98': {nome: 'Locação', cor: '#A78BFA'},
+  '1.01.01': {nome: 'Comissionamento', cor: '#2DD4BF'},
+};
+const CUSTOS_DIRETOS = {
+  '1.01.03': '2.01.03',
+  '1.01.99': '2.01.01',
+  '1.01.98': '2.07.01',
+  '1.01.01': '2.02.01',
+};
 
+function renderVendas(dc){
+  const L=dadosFiltrados.lancamentos;
+
+  // Agrupar receitas por linha e por mês
+  const recPorLinhaMes={};  // {catCode: {mes: valor}}
+  const custoPorLinha={};   // {catCode: valor}
+  let totalRec=0, totalMRR=0, totalCusto=0;
+
+  // Mapear custos diretos invertido: custoCat → receitaCat
+  const custoToReceita={};
+  Object.entries(CUSTOS_DIRETOS).forEach(([rCat,cCat])=>{custoToReceita[cCat]=rCat});
+
+  L.forEach(l=>{
+    const cat=l.categoria_codigo||'';
+    const m=toYM(l.data);if(!m)return;
+    const grupo=cat.split('.').slice(0,3).join('.');
+
+    // Receitas
+    if(LINHAS_RECEITA[grupo]&&l.tipo==='entrada'){
+      if(!recPorLinhaMes[grupo])recPorLinhaMes[grupo]={};
+      recPorLinhaMes[grupo][m]=(recPorLinhaMes[grupo][m]||0)+l.valor;
+      totalRec+=l.valor;
+      if(grupo==='1.01.02')totalMRR+=l.valor;
+    }
+
+    // Custos diretos
+    if(custoToReceita[grupo]&&l.tipo==='saida'){
+      const rCat=custoToReceita[grupo];
+      custoPorLinha[rCat]=(custoPorLinha[rCat]||0)+l.valor;
+      totalCusto+=l.valor;
+    }
+  });
+
+  const margemBruta=totalRec>0?((totalRec-totalCusto)/totalRec*100):0;
+  const totalSetup=Object.values(recPorLinhaMes['1.01.03']||{}).reduce((s,v)=>s+v,0);
+
+  // KPIs
   document.getElementById('kpi-vendas').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Total Receitas</div><div class="kpi-value green">${fmt(totalVendas)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Lançamentos</div><div class="kpi-value blue">${fmtNum(ent.length)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value purple">${fmt(ent.length>0?totalVendas/ent.length:0)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Média Mensal</div><div class="kpi-value cyan">${fmt(totalVendas/nMeses)}</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Receita Total</div><div class="kpi-value green">${fmt(totalRec)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">MRR (Mensalidades)</div><div class="kpi-value cyan">${fmt(totalMRR)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Receita Setup</div><div class="kpi-value blue">${fmt(totalSetup)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Margem Bruta</div><div class="kpi-value ${margemBruta>=30?'green':margemBruta>=15?'yellow':'red'}">${margemBruta.toFixed(1)}%</div></div>`;
 
-  const vYoY=meses.map(m=>{const pm=getAllFinMesAll()[getYoYMonth(m)];return pm?pm.receita:null});
-  charts.vMes=new Chart(document.getElementById('chartVendasMes'),{type:'bar',data:{labels:meses.map(mesNome),datasets:[{label:'Receita',data:meses.map(m=>porMes[m].entrada||0),backgroundColor:'#3b82f688',borderColor:'#3b82f6',borderWidth:1,yAxisID:'y'},{label:'Despesa',data:meses.map(m=>porMes[m].saida||0),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1,yAxisID:'y'},{type:'line',label:'Receita Ano Ant.',data:vYoY,borderDash:[5,5],borderColor:'#ffffff33',borderWidth:1.5,pointRadius:2,pointBackgroundColor:'#ffffff33',tension:.3,fill:false,spanGaps:false,order:0,yAxisID:'y',datalabels:{display:false}}]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{position:'left',ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8'}},datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]!==0,color:'#cbd5e1',font:{size:9},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
+  // Meses ordenados (união de todos)
+  const allMeses=new Set();
+  Object.values(recPorLinhaMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
+  const meses=[...allMeses].sort();
 
-  // Etapas dos pedidos (API data, não filtrada por data)
-  const v=dadosOriginal.vendas;
-  if(v){
-    const et=Object.entries(v.por_etapa);
-    charts.etapas=new Chart(document.getElementById('chartEtapas'),{type:'doughnut',data:{labels:et.map(e=>e[0]),datasets:[{data:et.map(e=>e[1]),backgroundColor:cores}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:11}}},datalabels:{display:ctx=>{const d=ctx.dataset.data;const t=d.reduce((a,b)=>a+b,0);return d[ctx.dataIndex]/t>0.05},color:'#fff',font:{size:9,weight:600},formatter:v=>v+' pedidos'}}}});
-  }
+  // ---- Gráfico 1: Stacked Bar — Receita por Linha (mensal) ----
+  const stackDS=Object.entries(LINHAS_RECEITA).map(([cat,info])=>({
+    label:info.nome,
+    data:meses.map(m=>(recPorLinhaMes[cat]||{})[m]||0),
+    backgroundColor:info.cor+'aa',
+    borderColor:info.cor,
+    borderWidth:1
+  }));
+  charts.recStack=new Chart(document.getElementById('chartReceitasStack'),{type:'bar',
+    data:{labels:meses.map(mesNome),datasets:stackDS},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+              y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+        datalabels:{display:ctx=>{const ds=ctx.chart.data.datasets;const i=ctx.dataIndex;const isLast=ctx.datasetIndex===ds.length-1||ds.slice(ctx.datasetIndex+1).every(d=>!d.data[i]);return isLast&&ctx.dataset.data[i]>0},color:'#fff',font:{size:9,weight:600},anchor:'end',align:'top',
+          formatter:(v,ctx)=>{const i=ctx.dataIndex;let t=0;ctx.chart.data.datasets.forEach(d=>{t+=d.data[i]||0});return fmtK(t)}}
+      }}
+  });
 
-  const topCli=Object.entries(d.porCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // ---- Gráfico 2: Waterfall — Composição da Receita Acumulada ----
+  const linhaOrder=['1.01.02','1.01.03','1.01.99','1.01.98','1.01.01'];
+  const wfLabels=[], wfData=[], wfColors=[], wfBorders=[];
+  let running=0;
+  linhaOrder.forEach(cat=>{
+    const info=LINHAS_RECEITA[cat];
+    const val=Object.values(recPorLinhaMes[cat]||{}).reduce((s,v)=>s+v,0);
+    wfLabels.push(info.nome);
+    wfData.push([running, running+val]);
+    wfColors.push(info.cor+'aa');
+    wfBorders.push(info.cor);
+    running+=val;
+  });
+  wfLabels.push('TOTAL');
+  wfData.push([0, running]);
+  wfColors.push('rgba(255,255,255,.15)');
+  wfBorders.push('rgba(255,255,255,.4)');
+
+  charts.recWF=new Chart(document.getElementById('chartReceitasWaterfall'),{type:'bar',
+    data:{labels:wfLabels,datasets:[{data:wfData,backgroundColor:wfColors,borderColor:wfBorders,borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},
+              y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{display:false},
+        datalabels:{display:true,color:'#fff',font:{size:10,weight:600},anchor:'end',align:'top',
+          formatter:v=>{const val=Array.isArray(v)?v[1]-v[0]:v;return fmtK(val)}}
+      }}
+  });
+
+  // ---- Gráfico 3: Grouped Bar — Receita vs Custo Direto ----
+  const rcLabels=[], rcRec=[], rcCusto=[], rcMargemLabels=[];
+  Object.entries(CUSTOS_DIRETOS).forEach(([rCat])=>{
+    const info=LINHAS_RECEITA[rCat];
+    const rec=Object.values(recPorLinhaMes[rCat]||{}).reduce((s,v)=>s+v,0);
+    const custo=custoPorLinha[rCat]||0;
+    rcLabels.push(info.nome);
+    rcRec.push(rec);
+    rcCusto.push(custo);
+    rcMargemLabels.push(rec>0?((rec-custo)/rec*100).toFixed(0)+'%':'--');
+  });
+
+  charts.recCusto=new Chart(document.getElementById('chartReceitasCusto'),{type:'bar',
+    data:{labels:rcLabels,datasets:[
+      {label:'Receita',data:rcRec,backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
+      {label:'Custo Direto',data:rcCusto,backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+              y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{labels:{color:'#94a3b8'}},
+        datalabels:{display:ctx=>ctx.datasetIndex===0&&ctx.dataset.data[ctx.dataIndex]>0,
+          color:'#FFB547',font:{size:11,weight:'bold'},anchor:'end',align:'top',
+          formatter:(v,ctx)=>rcMargemLabels[ctx.dataIndex]}
+      }}
+  });
+
+  // ---- Gráfico 4 & 5: Top Clientes e Top Projetos (mantidos) ----
+  const topCli=Object.entries(dc.porCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
   charts.topCli=new Chart(document.getElementById('chartTopClientes'),{type:'bar',data:{labels:topCli.map(e=>e[0].substring(0,30)),datasets:[{data:topCli.map(e=>e[1]),backgroundColor:'#22c55e88'}]},options:hBarOpts()});
-  const topPrj=Object.entries(d.porProj).filter(e=>e[1].entrada>0).sort((a,b)=>b[1].entrada-a[1].entrada).slice(0,10);
+  const topPrj=Object.entries(dc.porProj).filter(e=>e[1].entrada>0).sort((a,b)=>b[1].entrada-a[1].entrada).slice(0,10);
   charts.topPrjV=new Chart(document.getElementById('chartTopProjVendas'),{type:'bar',data:{labels:topPrj.map(e=>e[1].nome.substring(0,30)),datasets:[{data:topPrj.map(e=>e[1].entrada),backgroundColor:'#3b82f688'}]},options:hBarOpts()});
 }
 
