@@ -121,6 +121,7 @@ def ensure_tables(client: bigquery.Client) -> None:
             status_codigo STRING, status_nome STRING,
             valor_mensal FLOAT64,
             cliente_id INT64, cliente_nome STRING,
+            vendedor_id INT64, vendedor_nome STRING, comissao_pct FLOAT64,
             vigencia_inicio DATE, vigencia_fim DATE,
             tipo_faturamento STRING, dia_faturamento INT64,
             categoria_codigo STRING,
@@ -809,9 +810,28 @@ STATUS_CONTRATO_MAP = {
 }
 
 
+def coletar_vendedores() -> tuple[dict[int, str], dict[int, float]]:
+    """Coleta vendedores do Omie. Retorna (vend_map, vend_comissao)."""
+    print("\n📥 Vendedores...", flush=True)
+    data = omie_request("geral/vendedores", "ListarVendedores",
+                        {"pagina": 1, "registros_por_pagina": 100})
+    vend_map: dict[int, str] = {}
+    vend_comissao: dict[int, float] = {}
+    if data:
+        for v in data.get("cadastro", []):
+            cod = v.get("codigo")
+            if cod:
+                vend_map[cod] = v.get("nome", "")
+                vend_comissao[cod] = float(v.get("comissao", 0) or 0)
+    print(f"  ✅ {len(vend_map)} vendedores", flush=True)
+    return vend_map, vend_comissao
+
+
 def coletar_contratos(
     cli_map: dict[int, str],
     proj_map: dict[int, str],
+    vend_map: dict[int, str],
+    vend_comissao: dict[int, float],
     sync_ts: str,
     sync_date: str,
 ) -> list[dict]:
@@ -847,6 +867,7 @@ def coletar_contratos(
         cli_id = cab.get("nCodCli")
         proj_id = info.get("nCodProj")
 
+        vend_id = info.get("nCodVend") or None
         contratos.append({
             "contrato_id": contrato_id,
             "numero_contrato": cab.get("cNumCtr", ""),
@@ -855,6 +876,9 @@ def coletar_contratos(
             "valor_mensal": float(cab.get("nValTotMes", 0) or 0),
             "cliente_id": cli_id,
             "cliente_nome": cli_map.get(cli_id, "") if cli_id else "",
+            "vendedor_id": vend_id,
+            "vendedor_nome": vend_map.get(vend_id, "") if vend_id else "",
+            "comissao_pct": vend_comissao.get(vend_id, 0) if vend_id else 0,
             "vigencia_inicio": parse_date(cab.get("dVigInicial", "")),
             "vigencia_fim": parse_date(cab.get("dVigFinal", "")),
             "tipo_faturamento": cab.get("cTipoFat", ""),
@@ -1014,7 +1038,8 @@ def main() -> None:
         lancamentos = coletar_lancamentos(cat_map, proj_map, cli_map, sync_ts, sync_date, mf_datas)
         clientes_bq = coletar_clientes_bq(clientes_raw, sync_ts)
         vendas = coletar_vendas_bq(sync_ts, sync_date)
-        contratos = coletar_contratos(cli_map, proj_map, sync_ts, sync_date)
+        vend_map, vend_comissao = coletar_vendedores()
+        contratos = coletar_contratos(cli_map, proj_map, vend_map, vend_comissao, sync_ts, sync_date)
 
         # ---- Proteção contra dados vazios ----
         if not lancamentos and not saldos:

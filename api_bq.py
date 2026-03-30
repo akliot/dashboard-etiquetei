@@ -361,6 +361,7 @@ def build_json() -> dict:
         ctr_rows = query_rows(f"""
             SELECT contrato_id, numero_contrato, status_codigo, status_nome,
                    valor_mensal, cliente_id, cliente_nome,
+                   vendedor_id, vendedor_nome, comissao_pct,
                    vigencia_inicio, vigencia_fim, tipo_faturamento,
                    dia_faturamento, categoria_codigo, projeto_id, projeto_nome
             FROM {tbl('contratos')}
@@ -383,6 +384,8 @@ def build_json() -> dict:
                     "status_codigo": r.get("status_codigo", ""),
                     "valor_mensal": val_mensal,
                     "cliente_nome": r.get("cliente_nome", ""),
+                    "vendedor_nome": r.get("vendedor_nome", ""),
+                    "comissao_pct": float(r.get("comissao_pct", 0) or 0),
                     "vigencia_inicio": date_to_ddmmyyyy(r.get("vigencia_inicio")),
                     "vigencia_fim": date_to_ddmmyyyy(r.get("vigencia_fim")),
                     "categoria": r.get("categoria_codigo", ""),

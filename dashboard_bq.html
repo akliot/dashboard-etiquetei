@@ -1573,75 +1573,128 @@ function renderComissaoView(){
   const tituloEl=document.getElementById('comissaoTabelaTitulo');
   const detalheEl=document.getElementById('comissaoDetalhe');
 
+  // Contratos com vendedor (para cruzar vendedor → cliente → valor)
+  const ctrLista=(dadosOriginal.contratos?.lista||[]);
+
   if(!_comissaoVendedor){
-    // Visão geral: tabela de todos os vendedores com meses
+    // Visão geral: tabela pivot vendedor × mês
     tituloEl.innerHTML='Comissões — Todos os Vendedores <span class="regime-badge caixa">Caixa</span>';
     const vendedores=Object.entries(_comissaoData).sort((a,b)=>b[1].total-a[1].total);
     const allMeses=new Set();
     vendedores.forEach(([v,d])=>Object.keys(d.meses).forEach(m=>allMeses.add(m)));
     const meses=[...allMeses].sort();
 
-    let h='<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Vendedor</th>';
+    // Enrich with comissao_pct from contratos
+    const vendPct={};
+    ctrLista.forEach(c=>{if(c.vendedor_nome&&c.comissao_pct)vendPct[c.vendedor_nome]=c.comissao_pct});
+
+    let h='<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Vendedor</th><th style="text-align:center">%</th>';
     meses.forEach(m=>{h+=`<th style="text-align:right;font-size:10px">${mesNome(m)}</th>`});
     h+='<th style="text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
     vendedores.forEach(([v,d])=>{
+      const pct=vendPct[v]||0;
       h+=`<tr style="cursor:pointer" onclick="document.getElementById('comissaoVendedorSelect').value='${v.replace(/'/g,"\\'")}';setComissaoVendedor('${v.replace(/'/g,"\\'")}')">`;
       h+=`<td style="white-space:nowrap;font-weight:500">${v.substring(0,30)}</td>`;
+      h+=`<td style="text-align:center;font-size:11px;color:var(--muted)">${pct?pct+'%':'—'}</td>`;
       meses.forEach(m=>{const val=d.meses[m]||0;h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${val?'#FB923C':'var(--border)'}">${val?fmt(val):'—'}</td>`});
       h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:#FB923C">${fmt(d.total)}</td></tr>`;
     });
-    // Totals row
-    h+='<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td>';
+    h+='<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td></td>';
     meses.forEach(m=>{const t=vendedores.reduce((s,[v,d])=>s+(d.meses[m]||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
     const grandTotal=vendedores.reduce((s,[v,d])=>s+d.total,0);
     h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(grandTotal)}</td></tr>`;
     h+='</tbody></table>';
     detalheEl.innerHTML=h;
   } else {
-    // Visão individual: fluxo de caixa do vendedor com clientes como linhas
+    // Visão individual: memória de cálculo — vendedor → clientes → receita × %
     const v=_comissaoVendedor;
     const d=_comissaoData[v];
-    if(!d){detalheEl.innerHTML='<p style="color:var(--muted);padding:20px">Sem dados para este vendedor.</p>';return}
 
-    tituloEl.innerHTML=`Comissões — ${v} <span class="regime-badge caixa">Caixa</span> <span style="font-size:14px;color:#FB923C;font-weight:700;margin-left:12px">${fmt(d.total)}</span>`;
+    // Pegar contratos deste vendedor
+    const meusCtr=ctrLista.filter(c=>c.vendedor_nome===v);
+    const pct=meusCtr.length?meusCtr[0].comissao_pct||0:0;
 
-    // Pegar os lançamentos de comissão deste vendedor com detalhe
-    const comL=dadosFiltrados.lancamentos.filter(l=>{
-      const g=(l.categoria||'').split('.').slice(0,3).join('.');
-      return g==='2.02.01'&&l.tipo==='saida'&&l.cliente_nome===v;
+    // Clientes deste vendedor (via contratos ativos)
+    const meusClientes={};  // cli_nome → {valor_mensal, receitas_por_mes}
+    meusCtr.forEach(c=>{
+      if(!c.cliente_nome)return;
+      if(!meusClientes[c.cliente_nome])meusClientes[c.cliente_nome]={valor_mensal:0,status:c.status_codigo};
+      if(String(c.status_codigo)==='10')meusClientes[c.cliente_nome].valor_mensal+=c.valor_mensal;
     });
 
-    const meses=Object.keys(d.meses).sort();
+    // Cruzar com receitas reais (entrada 1.01.*) desses clientes
+    const cliNomes=new Set(Object.keys(meusClientes));
+    const recPorCliMes={};  // cli → {mes: valor}
+    dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
+      const cli=l.cliente_nome;
+      const m=toYM(l.data);if(!m)return;
+      if(!recPorCliMes[cli])recPorCliMes[cli]={};
+      recPorCliMes[cli][m]=(recPorCliMes[cli][m]||0)+l.valor;
+    });
 
-    // Mostrar evolução mês a mês com valor
+    // Meses disponíveis
+    const allMeses=new Set();
+    Object.values(recPorCliMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
+    if(d)Object.keys(d.meses).forEach(m=>allMeses.add(m));
+    const meses=[...allMeses].sort();
+
+    // Total de receita e comissão calculada
+    let totalRec=0;
+    Object.values(recPorCliMes).forEach(mm=>Object.values(mm).forEach(v2=>totalRec+=v2));
+    const comissaoCalc=pct>0?totalRec*(pct/100):0;
+    const comissaoPaga=d?d.total:0;
+
+    tituloEl.innerHTML=`Comissões — ${v} <span style="background:rgba(251,146,60,.15);color:#FB923C;padding:2px 10px;border-radius:8px;font-size:12px;margin-left:8px">${pct}%</span>`;
+
+    // Bloco resumo
     let h=`<div style="margin-bottom:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">Resumo para enviar ao vendedor</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;line-height:2">`;
-    meses.forEach(m=>{
-      h+=`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:4px 0">
-        <span style="color:var(--muted)">${mesNome(m)}</span>
-        <span style="color:#FB923C;font-weight:600">${fmt(d.meses[m])}</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">Memória de Cálculo — ${v}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:12px">
+        <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Receita dos Clientes</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--green)">${fmt(totalRec)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Comissão Calculada (${pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:#FB923C">${fmt(comissaoCalc)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Comissão Paga</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:${Math.abs(comissaoPaga-comissaoCalc)<100?'var(--green)':'var(--red)'}">${fmt(comissaoPaga)}</div></div>
       </div>`;
-    });
-    h+=`<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid var(--accent);margin-top:4px">
-        <span style="font-weight:700">TOTAL A RECEBER</span>
-        <span style="color:#FB923C;font-weight:700;font-size:16px">${fmt(d.total)}</span>
-      </div>`;
-    h+='</div></div>';
 
-    // Tabela detalhada: cada pagamento
-    h+=`<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr>
-      <th>Mês Ref.</th><th style="text-align:right">Valor</th><th>Data Pagamento</th>
-    </tr></thead><tbody>`;
-    comL.sort((a,b)=>(a.data_vencimento||a.data).localeCompare(b.data_vencimento||b.data)).forEach(l=>{
-      const m=toYM(l.data);
-      h+=`<tr>
-        <td>${m?mesNome(m):'—'}</td>
-        <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(l.valor)}</td>
-        <td style="font-size:12px;color:var(--muted)">${l.data||'—'}</td>
-      </tr>`;
+    // Diferença
+    const diff=comissaoCalc-comissaoPaga;
+    if(Math.abs(diff)>10){
+      h+=`<div style="padding:8px 12px;border-radius:6px;font-size:12px;background:${diff>0?'rgba(255,107,107,.1)':'rgba(61,220,151,.1)'};color:${diff>0?'var(--red)':'var(--green)'}">
+        ${diff>0?'Falta pagar: '+fmt(diff):'Pago a mais: '+fmt(Math.abs(diff))}
+      </div>`;
+    }
+    h+='</div>';
+
+    // Tabela pivot: Cliente × Mês (receita)
+    const cliSorted=Object.entries(meusClientes).sort((a,b)=>{
+      const tA=Object.values(recPorCliMes[a[0]]||{}).reduce((s,v2)=>s+v2,0);
+      const tB=Object.values(recPorCliMes[b[0]]||{}).reduce((s,v2)=>s+v2,0);
+      return tB-tA;
     });
+
+    h+=`<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Cliente</th><th style="text-align:right;font-size:10px">Contrato/mês</th>`;
+    meses.forEach(m=>{h+=`<th style="text-align:right;font-size:10px">${mesNome(m)}</th>`});
+    h+='<th style="text-align:right;font-weight:700">Total Rec.</th><th style="text-align:right;font-weight:700">Comissão</th></tr></thead><tbody>';
+
+    let gtRec=0,gtCom=0;
+    cliSorted.forEach(([cli,info])=>{
+      const rec=recPorCliMes[cli]||{};
+      const totalCli=Object.values(rec).reduce((s,v2)=>s+v2,0);
+      const comCli=pct>0?totalCli*(pct/100):0;
+      gtRec+=totalCli;gtCom+=comCli;
+      h+=`<tr><td style="white-space:nowrap">${cli.substring(0,35)}</td>`;
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:11px">${fmt(info.valor_mensal)}</td>`;
+      meses.forEach(m=>{const val=rec[m]||0;h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${val?'var(--green)':'var(--border)'};font-size:11px">${val?fmt(val):'—'}</td>`});
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--green)">${fmt(totalCli)}</td>`;
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:#FB923C">${fmt(comCli)}</td></tr>`;
+    });
+
+    // Totals
+    h+=`<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td></td>`;
+    meses.forEach(m=>{const t=cliSorted.reduce((s,[cli])=>s+(recPorCliMes[cli]?.[m]||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--green)">${fmt(gtRec)}</td>`;
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(gtCom)}</td></tr>`;
     h+='</tbody></table>';
+
     detalheEl.innerHTML=h;
   }
 }
