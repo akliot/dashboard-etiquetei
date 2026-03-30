@@ -2,7 +2,10 @@
 
 ## ⚡ Primeira ação (leia antes de qualquer tarefa)
 
-Antes de fazer qualquer alteração, leia silenciosamente estes arquivos de contexto do Obsidian:
+Antes de fazer qualquer alteração, leia silenciosamente:
+
+1. `LEARNINGS.md` (neste repo) — bugs, decisões e padrões já descobertos
+2. Estes arquivos de contexto do Obsidian:
 
 ```bash
 cat ~/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/Software\ e\ Projetos/Dashboard\ Omie/00\ -\ Visão\ Geral.md
