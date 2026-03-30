@@ -1662,6 +1662,7 @@ function renderComissaoView(){
         ${diff>0?'Falta pagar: '+fmt(diff):'Pago a mais: '+fmt(Math.abs(diff))}
       </div>`;
     }
+    h+=`<div style="margin-top:12px;text-align:right"><button onclick="exportarMemoriaComissao()" style="background:#FB923C;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Exportar Memoria</button></div>`;
     h+='</div>';
 
     // Tabela pivot: Cliente × Mês (receita)
@@ -1697,6 +1698,72 @@ function renderComissaoView(){
 
     detalheEl.innerHTML=h;
   }
+}
+
+function exportarMemoriaComissao(){
+  const v=_comissaoVendedor;if(!v)return;
+  const d=_comissaoData[v];
+  const ctrLista=(dadosFiltrados.contratos||{}).lista||[];
+  const meusCtr=ctrLista.filter(c=>c.vendedor_nome===v);
+  const pct=meusCtr.length?meusCtr[0].comissao_pct||0:0;
+
+  const meusClientes={};
+  meusCtr.forEach(c=>{if(!c.cliente_nome)return;if(!meusClientes[c.cliente_nome])meusClientes[c.cliente_nome]={valor_mensal:0};if(String(c.status_codigo)==='10')meusClientes[c.cliente_nome].valor_mensal+=c.valor_mensal});
+
+  const cliNomes=new Set(Object.keys(meusClientes));
+  const recPorCliMes={};
+  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.02')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
+    const cli=l.cliente_nome;const m=toYM(l.data);if(!m)return;
+    if(!recPorCliMes[cli])recPorCliMes[cli]={};
+    recPorCliMes[cli][m]=(recPorCliMes[cli][m]||0)+l.valor;
+  });
+
+  const allMeses=new Set();
+  Object.values(recPorCliMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
+  if(d)Object.keys(d.meses).forEach(m=>allMeses.add(m));
+  const meses=[...allMeses].sort();
+
+  let totalRec=0;
+  Object.values(recPorCliMes).forEach(mm=>Object.values(mm).forEach(v2=>totalRec+=v2));
+  const comissaoCalc=pct>0?totalRec*(pct/100):0;
+  const comissaoPaga=d?d.total:0;
+  const diff=comissaoCalc-comissaoPaga;
+
+  const cliSorted=Object.entries(meusClientes).sort((a,b)=>{
+    const tA=Object.values(recPorCliMes[a[0]]||{}).reduce((s,v2)=>s+v2,0);
+    const tB=Object.values(recPorCliMes[b[0]]||{}).reduce((s,v2)=>s+v2,0);
+    return tB-tA;
+  });
+
+  const sep='\t';
+  let txt=`MEMORIA DE CALCULO — COMISSAO\n`;
+  txt+=`Vendedor: ${v}\n`;
+  txt+=`Periodo: ${meses.map(mesNome).join(' a ')}\n`;
+  txt+=`Comissao: ${pct}%\n\n`;
+
+  // Header
+  txt+=`Cliente${sep}Contrato/mes${sep}${meses.map(mesNome).join(sep)}${sep}Total Receita${sep}Comissao\n`;
+
+  let gtRec=0,gtCom=0;
+  cliSorted.forEach(([cli,info])=>{
+    const rec=recPorCliMes[cli]||{};
+    const totalCli=Object.values(rec).reduce((s,v2)=>s+v2,0);
+    const comCli=pct>0?totalCli*(pct/100):0;
+    gtRec+=totalCli;gtCom+=comCli;
+    txt+=`${cli}${sep}${fmt(info.valor_mensal)}${sep}${meses.map(m=>rec[m]?fmt(rec[m]):'—').join(sep)}${sep}${fmt(totalCli)}${sep}${fmt(comCli)}\n`;
+  });
+
+  txt+=`\nTOTAL${sep}${sep}${meses.map(m=>{const t=cliSorted.reduce((s,[cli])=>s+(recPorCliMes[cli]?.[m]||0),0);return fmt(t)}).join(sep)}${sep}${fmt(gtRec)}${sep}${fmt(gtCom)}\n`;
+  txt+=`\nResumo:\n`;
+  txt+=`  Receita SaaS dos Clientes: ${fmt(totalRec)}\n`;
+  txt+=`  Comissao Calculada (${pct}%): ${fmt(comissaoCalc)}\n`;
+  txt+=`  Comissao Paga: ${fmt(comissaoPaga)}\n`;
+  if(Math.abs(diff)>10) txt+=`  ${diff>0?'Falta pagar: '+fmt(diff):'Pago a mais: '+fmt(Math.abs(diff))}\n`;
+
+  navigator.clipboard.writeText(txt).then(()=>{
+    const btn=document.querySelector('[onclick="exportarMemoriaComissao()"]');
+    if(btn){const orig=btn.textContent;btn.textContent='Copiado!';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent=orig;btn.style.background='#FB923C'},2000)}
+  });
 }
 
 // ============ COBRANÇA ============
