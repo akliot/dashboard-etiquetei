@@ -1622,10 +1622,10 @@ function renderComissaoView(){
       if(String(c.status_codigo)==='10')meusClientes[c.cliente_nome].valor_mensal+=c.valor_mensal;
     });
 
-    // Cruzar com receitas SaaS (entrada 1.01.02 — Mensalidade) desses clientes
+    // Cruzar com receitas SaaS (entrada 1.01.* — todas linhas) desses clientes
     const cliNomes=new Set(Object.keys(meusClientes));
     const recPorCliMes={};  // cli → {mes: valor}
-    dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.02')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
+    dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
       const cli=l.cliente_nome;
       const m=toYM(l.data);if(!m)return;
       if(!recPorCliMes[cli])recPorCliMes[cli]={};
@@ -1703,7 +1703,7 @@ function renderComissaoView(){
 function exportarMemoriaComissao(){
   const v=_comissaoVendedor;if(!v)return;
   const d=_comissaoData[v];
-  const ctrLista=(dadosFiltrados.contratos||{}).lista||[];
+  const ctrLista=(dadosOriginal.contratos||{}).lista||[];
   const meusCtr=ctrLista.filter(c=>c.vendedor_nome===v);
   const pct=meusCtr.length?meusCtr[0].comissao_pct||0:0;
 
@@ -1712,7 +1712,7 @@ function exportarMemoriaComissao(){
 
   const cliNomes=new Set(Object.keys(meusClientes));
   const recPorCliMes={};
-  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.02')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
+  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
     const cli=l.cliente_nome;const m=toYM(l.data);if(!m)return;
     if(!recPorCliMes[cli])recPorCliMes[cli]={};
     recPorCliMes[cli][m]=(recPorCliMes[cli][m]||0)+l.valor;

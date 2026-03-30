@@ -375,13 +375,13 @@ def build_json() -> dict:
                 status = r.get("status_nome", "")
                 val_mensal = float(r.get("valor_mensal", 0) or 0)
                 por_status[status] += 1
-                if r.get("status_codigo") == "10":  # Ativo
+                if str(r.get("status_codigo", "")) == "10":  # Ativo
                     mrr += val_mensal
                 contratos_list.append({
                     "id": r["contrato_id"],
                     "numero": r.get("numero_contrato", ""),
                     "status": status,
-                    "status_codigo": r.get("status_codigo", ""),
+                    "status_codigo": str(r.get("status_codigo", "")),
                     "valor_mensal": val_mensal,
                     "cliente_nome": r.get("cliente_nome", ""),
                     "vendedor_nome": r.get("vendedor_nome", ""),
