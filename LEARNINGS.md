@@ -32,6 +32,21 @@
 **Fix:** `time.sleep(0.1)` entre chamadas paginadas.
 **Regra:** Testes locais frequentes dão 403. Validar via GitHub Actions quando possível.
 
+### status_codigo int vs string (30/03/2026)
+**Problema:** BigQuery retorna `status_codigo` como `INT64` (10), mas `api_bq.py` comparava com `"10"` (string). MRR ficava sempre 0.
+**Fix:** `str(r.get("status_codigo", "")) == "10"` no backend + frontend.
+**Regra:** Sempre converter para `str()` ao comparar campos numéricos do BQ com strings. Mesmo bug que `cat_cod`.
+
+### dadosFiltrados vs dadosOriginal — contratos (30/03/2026)
+**Problema:** `exportarMemoriaComissao()` buscava contratos em `dadosFiltrados.contratos` (que não existe — contratos não são filtrados por data).
+**Fix:** Usar `dadosOriginal.contratos`.
+**Regra:** Contratos são dados de referência (cadastro), não transações. Sempre acessar via `dadosOriginal`.
+
+### Filtro de receita SaaS muito restritivo (30/03/2026)
+**Problema:** Comissão cruzava apenas `1.01.02` (Mensalidade). Ignorava Setup (1.01.03), Etiquetas (1.01.99), Locação (1.01.98).
+**Fix:** Filtrar por `1.01.*` (todas linhas de receita SaaS).
+**Regra:** Comissão sobre a receita total do cliente, não só mensalidade.
+
 ---
 
 ## 📐 Decisões de Arquitetura
