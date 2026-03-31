@@ -1609,110 +1609,120 @@ function setComissaoVendedor(v){
 function renderComissaoView(){
   const tituloEl=document.getElementById('comissaoTabelaTitulo');
   const detalheEl=document.getElementById('comissaoDetalhe');
-
-  // Contratos com vendedor (para cruzar vendedor → cliente → valor)
   const ctrLista=(dadosOriginal.contratos?.lista||[]);
+  const vendMap={};
+  ctrLista.forEach(c=>{
+    if(!c.vendedor_nome||!c.comissao_pct)return;
+    if(!vendMap[c.vendedor_nome])vendMap[c.vendedor_nome]={pct:c.comissao_pct,clientes:new Set(),clienteInfo:{}};
+    if(c.cliente_nome){
+      vendMap[c.vendedor_nome].clientes.add(c.cliente_nome);
+      if(!vendMap[c.vendedor_nome].clienteInfo[c.cliente_nome])vendMap[c.vendedor_nome].clienteInfo[c.cliente_nome]={valor_mensal:0};
+      if(String(c.status_codigo)==='10')vendMap[c.vendedor_nome].clienteInfo[c.cliente_nome].valor_mensal+=c.valor_mensal;
+    }
+  });
+  const recGlobal={};
+  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')).forEach(l=>{
+    const cli=l.cliente_nome||'';const m=toYM(l.data);if(!m)return;
+    if(!recGlobal[cli])recGlobal[cli]={};
+    recGlobal[cli][m]=(recGlobal[cli][m]||0)+l.valor;
+  });
+  const comL=dadosFiltrados.lancamentos.filter(l=>{const g=(l.categoria||'').split('.').slice(0,3).join('.');return g==='2.02.01'&&l.tipo==='saida'});
+  const pagoPorForn={};
+  comL.forEach(l=>{const fn=l.cliente_nome||'';const m=toYM(l.data);if(!m)return;if(!pagoPorForn[fn])pagoPorForn[fn]={};pagoPorForn[fn][m]=(pagoPorForn[fn][m]||0)+l.valor});
 
   if(!_comissaoVendedor){
-    // Visão geral: tabela pivot vendedor × mês
-    tituloEl.innerHTML='Comissões — Todos os Vendedores <span class="regime-badge caixa">Caixa</span>';
-    const vendedores=Object.entries(_comissaoData).sort((a,b)=>b[1].total-a[1].total);
-    const allMeses=new Set();
-    vendedores.forEach(([v,d])=>Object.keys(d.meses).forEach(m=>allMeses.add(m)));
+    tituloEl.innerHTML='Comissões por Vendedor <span class="regime-badge caixa">Base: Receita dos Clientes</span>';
+    const vendData=[];const allMeses=new Set();
+    Object.entries(vendMap).forEach(([vNome,vInfo])=>{
+      const meses={};let totalRec=0;
+      vInfo.clientes.forEach(cli=>{const rec=recGlobal[cli]||{};Object.entries(rec).forEach(([m,val])=>{allMeses.add(m);if(!meses[m])meses[m]={receita:0,comissao:0};meses[m].receita+=val;meses[m].comissao+=val*(vInfo.pct/100);totalRec+=val})});
+      vendData.push({nome:vNome,pct:vInfo.pct,meses,totalRec,totalCom:totalRec*(vInfo.pct/100)});
+    });
+    vendData.sort((a,b)=>b.totalCom-a.totalCom);
     const meses=[...allMeses].sort();
-
-    // Enrich with comissao_pct from contratos
-    const vendPct={};
-    ctrLista.forEach(c=>{if(c.vendedor_nome&&c.comissao_pct)vendPct[c.vendedor_nome]=c.comissao_pct});
-
     let h='<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Vendedor</th><th style="text-align:center">%</th>';
     meses.forEach(m=>{h+=`<th style="text-align:right;font-size:10px">${mesNome(m)}</th>`});
-    h+='<th style="text-align:right;font-weight:700">Total</th></tr></thead><tbody>';
-    vendedores.forEach(([v,d])=>{
-      const pct=vendPct[v]||0;
-      h+=`<tr style="cursor:pointer" onclick="document.getElementById('comissaoVendedorSelect').value='${v.replace(/'/g,"\\'")}';setComissaoVendedor('${v.replace(/'/g,"\\'")}')">`;
-      h+=`<td style="white-space:nowrap;font-weight:500">${v.substring(0,30)}</td>`;
-      h+=`<td style="text-align:center;font-size:11px;color:var(--muted)">${pct?pct+'%':'—'}</td>`;
-      meses.forEach(m=>{const val=d.meses[m]||0;h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${val?'#FB923C':'var(--border)'}">${val?fmt(val):'—'}</td>`});
-      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:#FB923C">${fmt(d.total)}</td></tr>`;
+    h+='<th style="text-align:right;font-weight:700">Receita</th><th style="text-align:right;font-weight:700;color:#FB923C">Comissão</th></tr></thead><tbody>';
+    let gtRec=0,gtCom=0;
+    vendData.forEach(vd=>{
+      gtRec+=vd.totalRec;gtCom+=vd.totalCom;
+      h+=`<tr style="cursor:pointer" onclick="document.getElementById('comissaoVendedorSelect').value='${vd.nome.replace(/'/g,"\\'")}';setComissaoVendedor('${vd.nome.replace(/'/g,"\\'")}')" title="Clique para ver por restaurante">`;
+      h+=`<td style="white-space:nowrap;font-weight:500">${vd.nome.substring(0,25)}</td>`;
+      h+=`<td style="text-align:center;font-size:11px;color:var(--muted)">${vd.pct}%</td>`;
+      meses.forEach(m=>{const com=vd.meses[m]?.comissao||0;h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${com?'#FB923C':'var(--border)'};font-size:11px">${com?fmt(com):'—'}</td>`});
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--green);font-size:11px">${fmt(vd.totalRec)}</td>`;
+      h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:#FB923C">${fmt(vd.totalCom)}</td></tr>`;
     });
-    h+='<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td></td>';
-    meses.forEach(m=>{const t=vendedores.reduce((s,[v,d])=>s+(d.meses[m]||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
-    const grandTotal=vendedores.reduce((s,[v,d])=>s+d.total,0);
-    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(grandTotal)}</td></tr>`;
-    h+='</tbody></table>';
+    h+=`<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td></td>`;
+    meses.forEach(m=>{const t=vendData.reduce((s,vd)=>s+(vd.meses[m]?.comissao||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--green)">${fmt(gtRec)}</td>`;
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(gtCom)}</td></tr></tbody></table>`;
     detalheEl.innerHTML=h;
   } else {
-    // Visão individual: memória de cálculo — vendedor → clientes → receita × %
-    const v=_comissaoVendedor;
-    const d=_comissaoData[v];
-
-    // Pegar contratos deste vendedor
-    const meusCtr=ctrLista.filter(c=>c.vendedor_nome===v);
-    const pct=meusCtr.length?meusCtr[0].comissao_pct||0:0;
-
-    // Clientes deste vendedor (via contratos ativos)
-    const meusClientes={};  // cli_nome → {valor_mensal, receitas_por_mes}
-    meusCtr.forEach(c=>{
-      if(!c.cliente_nome)return;
-      if(!meusClientes[c.cliente_nome])meusClientes[c.cliente_nome]={valor_mensal:0,status:c.status_codigo};
-      if(String(c.status_codigo)==='10')meusClientes[c.cliente_nome].valor_mensal+=c.valor_mensal;
-    });
-
-    // Cruzar com receitas SaaS (entrada 1.01.* — todas linhas) desses clientes
-    const cliNomes=new Set(Object.keys(meusClientes));
-    const recPorCliMes={};  // cli → {mes: valor}
+    const v=_comissaoVendedor;const vInfo=vendMap[v];const pct=vInfo?.pct||0;
+    const meusClientes=vInfo?.clienteInfo||{};const cliNomes=vInfo?.clientes||new Set();
+    const recPorCliMes={};
     dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')&&cliNomes.has(l.cliente_nome)).forEach(l=>{
-      const cli=l.cliente_nome;
-      const m=toYM(l.data);if(!m)return;
-      if(!recPorCliMes[cli])recPorCliMes[cli]={};
-      recPorCliMes[cli][m]=(recPorCliMes[cli][m]||0)+l.valor;
+      const cli=l.cliente_nome;const m=toYM(l.data);if(!m)return;
+      if(!recPorCliMes[cli])recPorCliMes[cli]={};recPorCliMes[cli][m]=(recPorCliMes[cli][m]||0)+l.valor;
     });
-
-    // Meses disponíveis
     const allMeses=new Set();
     Object.values(recPorCliMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
-    if(d)Object.keys(d.meses).forEach(m=>allMeses.add(m));
     const meses=[...allMeses].sort();
-
-    // Total de receita e comissão calculada
     let totalRec=0;
     Object.values(recPorCliMes).forEach(mm=>Object.values(mm).forEach(v2=>totalRec+=v2));
     const comissaoCalc=pct>0?totalRec*(pct/100):0;
-    const comissaoPaga=d?d.total:0;
+    const forn=_vendedorToFornecedor[v]||'';
+    const pagoMeses=pagoPorForn[forn]||{};
+    const totalPago=Object.values(pagoMeses).reduce((s,v2)=>s+v2,0);
 
     tituloEl.innerHTML=`Comissões — ${v} <span style="background:rgba(251,146,60,.15);color:#FB923C;padding:2px 10px;border-radius:8px;font-size:12px;margin-left:8px">${pct}%</span>`;
 
-    // Bloco resumo
     let h=`<div style="margin-bottom:16px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
       <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">Memória de Cálculo — ${v}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:12px">
         <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Receita SaaS dos Clientes</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--green)">${fmt(totalRec)}</div></div>
         <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Comissão Calculada (${pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:#FB923C">${fmt(comissaoCalc)}</div></div>
-        <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Comissão Paga</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:${Math.abs(comissaoPaga-comissaoCalc)<100?'var(--green)':'var(--red)'}">${fmt(comissaoPaga)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Comissão Paga${forn?' ('+forn.substring(0,20)+')':''}</div><div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:${Math.abs(totalPago-comissaoCalc)<100?'var(--green)':'var(--red)'}">${fmt(totalPago)}</div></div>
       </div>`;
 
-    // Diferença
-    const diff=comissaoCalc-comissaoPaga;
+    if(meses.length>0&&forn){
+      h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">⏱ Comissão paga em mês N+1 = receita do mês N × ${pct}%</div>`;
+      h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">`;
+      meses.forEach(m=>{
+        const recMes=Object.values(recPorCliMes).reduce((s,mm)=>s+(mm[m]||0),0);
+        const comCalcMes=recMes*(pct/100);
+        const[y,mo]=m.split('-').map(Number);
+        const nextM=mo===12?`${y+1}-01`:`${y}-${String(mo+1).padStart(2,'0')}`;
+        const comPagoNext=pagoMeses[nextM]||0;
+        const ok=comPagoNext===0?null:Math.abs(comCalcMes-comPagoNext)<50;
+        h+=`<div style="padding:6px 10px;border-radius:6px;background:var(--card);border:1px solid var(--border);font-size:11px;min-width:110px">
+          <div style="color:var(--muted);font-size:9px">${mesNome(m)}</div>
+          <div style="color:#FB923C;font-weight:600">Calc: ${fmt(comCalcMes)}</div>
+          <div style="color:${ok===null?'var(--muted)':ok?'var(--green)':'var(--red)'}">Pago ${mesNome(nextM)}: ${comPagoNext?fmt(comPagoNext):'—'}</div>
+        </div>`;
+      });
+      h+=`</div>`;
+    }
+
+    const diff=comissaoCalc-totalPago;
     if(Math.abs(diff)>10){
       h+=`<div style="padding:8px 12px;border-radius:6px;font-size:12px;background:${diff>0?'rgba(255,107,107,.1)':'rgba(61,220,151,.1)'};color:${diff>0?'var(--red)':'var(--green)'}">
         ${diff>0?'Falta pagar: '+fmt(diff):'Pago a mais: '+fmt(Math.abs(diff))}
+        <span style="font-size:10px;color:var(--muted);margin-left:8px">(acumulado, sem offset mensal)</span>
       </div>`;
     }
-    h+=`<div style="margin-top:12px;text-align:right"><button onclick="exportarMemoriaComissao()" style="background:#FB923C;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Exportar Memoria</button></div>`;
+    h+=`<div style="margin-top:12px;text-align:right"><button onclick="exportarMemoriaComissao()" style="background:#FB923C;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📋 Exportar Memória</button></div>`;
     h+='</div>';
 
-    // Tabela pivot: Cliente × Mês (receita)
     const cliSorted=Object.entries(meusClientes).sort((a,b)=>{
       const tA=Object.values(recPorCliMes[a[0]]||{}).reduce((s,v2)=>s+v2,0);
       const tB=Object.values(recPorCliMes[b[0]]||{}).reduce((s,v2)=>s+v2,0);
       return tB-tA;
     });
-
-    h+=`<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Cliente</th><th style="text-align:right;font-size:10px">Contrato/mês</th>`;
+    h+=`<table style="font-size:12px"><thead style="position:sticky;top:0;background:var(--card);z-index:1"><tr><th>Restaurante</th><th style="text-align:right;font-size:10px">Contrato/mês</th>`;
     meses.forEach(m=>{h+=`<th style="text-align:right;font-size:10px">${mesNome(m)}</th>`});
-    h+='<th style="text-align:right;font-weight:700">Total Rec.</th><th style="text-align:right;font-weight:700">Comissão</th></tr></thead><tbody>';
-
+    h+='<th style="text-align:right;font-weight:700">Total Rec.</th><th style="text-align:right;font-weight:700;color:#FB923C">Comissão</th></tr></thead><tbody>';
     let gtRec=0,gtCom=0;
     cliSorted.forEach(([cli,info])=>{
       const rec=recPorCliMes[cli]||{};
@@ -1725,14 +1735,10 @@ function renderComissaoView(){
       h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--green)">${fmt(totalCli)}</td>`;
       h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:600;color:#FB923C">${fmt(comCli)}</td></tr>`;
     });
-
-    // Totals
     h+=`<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td></td>`;
     meses.forEach(m=>{const t=cliSorted.reduce((s,[cli])=>s+(recPorCliMes[cli]?.[m]||0),0);h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmt(t)}</td>`});
     h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--green)">${fmt(gtRec)}</td>`;
-    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(gtCom)}</td></tr>`;
-    h+='</tbody></table>';
-
+    h+=`<td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#FB923C">${fmt(gtCom)}</td></tr></tbody></table>`;
     detalheEl.innerHTML=h;
   }
 }
