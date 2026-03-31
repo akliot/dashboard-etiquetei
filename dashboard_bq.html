@@ -1499,6 +1499,7 @@ function renderContratos(){
     }
   }
 
+  const ctrLista = (dadosOriginal.contratos?.lista || []);
   // ---- COMISSÕES POR VENDEDOR (fluxo de caixa style) ----
   if(charts.comEvo){charts.comEvo.destroy();delete charts.comEvo}
 
