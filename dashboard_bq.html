@@ -1454,7 +1454,8 @@ function renderVendas(dc){
 function renderClientes(){}
 
 let _comissaoVendedor='';
-let _comissaoData=[];  // [{vendedor, meses:{mes:{clientes:{cli:val}, total}}, totalGeral}]
+let _comissaoData=[];
+let _vendedorToFornecedor={};
 
 function renderContratos(){
   const ctr=dadosOriginal.contratos;
@@ -1512,13 +1513,12 @@ function renderContratos(){
   comL.forEach(l=>{const m=toYM(l.data);if(m)comPorMesTotal[m]=(comPorMesTotal[m]||0)+l.valor});
   const comMeses=Object.keys(comPorMesTotal).sort();
   const comMedia=comMeses.length>0?comTotal/comMeses.length:0;
-  const vendedores=new Set();comL.forEach(l=>vendedores.add(l.cliente_nome||'Sem nome'));
 
   // KPIs
   document.getElementById('kpi-comissoes').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">Comissões no Período</div><div class="kpi-value" style="color:#FB923C">${fmt(comTotal)}</div><div class="kpi-sub">${comL.length} pagamentos</div></div>
     <div class="kpi-card"><div class="kpi-label">Comissão Média Mensal</div><div class="kpi-value" style="color:#FB923C">${fmt(comMedia)}</div><div class="kpi-sub">${comMeses.length} meses</div></div>
-    <div class="kpi-card"><div class="kpi-label">Vendedores</div><div class="kpi-value blue">${vendedores.size}</div><div class="kpi-sub">com comissão no período</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Vendedores</div><div class="kpi-value blue">${new Set(ctrLista.filter(c=>c.comissao_pct>0).map(c=>c.vendedor_nome)).size}</div><div class="kpi-sub">com comissão configurada</div></div>`;
 
   // Gráfico evolução
   if(comMeses.length){
@@ -1534,31 +1534,68 @@ function renderContratos(){
     });
   }
 
-  // Estruturar dados: por vendedor → por mês → por cliente
-  // Usar TODOS os lançamentos de receita (1.01.*) para cruzar com comissões
-  const recPorCliente={};
-  dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')).forEach(l=>{
-    const cli=l.cliente_nome||'';
-    const m=toYM(l.data);if(!m)return;
-    if(!recPorCliente[cli])recPorCliente[cli]={};
-    recPorCliente[cli][m]=(recPorCliente[cli][m]||0)+l.valor;
+  // ---- MAPEAMENTO VENDEDOR (contrato) ↔ FORNECEDOR (lançamento comissão) ----
+  // Nomes são diferentes: contrato tem "BRUNA MELO", lançamento tem "BRUNA THIARA GALLINDO DE MELLO"
+  // Estratégia: fuzzy match pela primeira palavra do nome do vendedor
+  const fornecedoresComissao=new Set();
+  comL.forEach(l=>fornecedoresComissao.add(l.cliente_nome||''));
+
+  const vendedorToFornecedor={};  // vendedor_nome (contrato) → cliente_nome (lançamento)
+  const fornecedorToVendedor={};  // inverso
+  const vendedoresUnicos=new Set();
+  ctrLista.forEach(c=>{if(c.vendedor_nome && c.comissao_pct>0) vendedoresUnicos.add(c.vendedor_nome)});
+
+  vendedoresUnicos.forEach(vNome=>{
+    const vLower=vNome.toLowerCase().trim();
+    const vWords=vLower.split(/\s+/);
+    // Tentar match exato primeiro
+    let match=[...fornecedoresComissao].find(f=>f.toLowerCase()===vLower);
+    if(!match){
+      // Match por primeira palavra (>= 4 chars) + segunda palavra se disponível
+      match=[...fornecedoresComissao].find(f=>{
+        const fLower=f.toLowerCase();
+        if(vWords[0].length>=4 && fLower.startsWith(vWords[0])) return true;
+        if(vWords.length>=2 && vWords[0].length>=3 && fLower.includes(vWords[0]) && fLower.includes(vWords[1])) return true;
+        return false;
+      });
+    }
+    if(match){
+      vendedorToFornecedor[vNome]=match;
+      fornecedorToVendedor[match]=vNome;
+    }
   });
 
-  // Comissões: vendedor → mês → valor
+  // Comissões pagas: agrupar por vendedor (usando mapa)
   const comData={};
-  comL.forEach(l=>{
-    const v=l.cliente_nome||'Sem nome';
+  // Primeiro: agrupar por vendedor_nome dos contratos
+  vendedoresUnicos.forEach(v=>{
+    comData[v]={meses:{},total:0};
+    const forn=vendedorToFornecedor[v];
+    if(forn){
+      comL.filter(l=>l.cliente_nome===forn).forEach(l=>{
+        const m=toYM(l.data);if(!m)return;
+        if(!comData[v].meses[m])comData[v].meses[m]=0;
+        comData[v].meses[m]+=l.valor;
+        comData[v].total+=l.valor;
+      });
+    }
+  });
+  // Adicionar fornecedores sem match como "outros"
+  const mappedForn=new Set(Object.values(vendedorToFornecedor));
+  comL.filter(l=>!mappedForn.has(l.cliente_nome)).forEach(l=>{
+    const fn=l.cliente_nome||'Sem nome';
+    if(!comData[fn])comData[fn]={meses:{},total:0};
     const m=toYM(l.data);if(!m)return;
-    if(!comData[v])comData[v]={meses:{},total:0};
-    if(!comData[v].meses[m])comData[v].meses[m]=0;
-    comData[v].meses[m]+=l.valor;
-    comData[v].total+=l.valor;
+    if(!comData[fn].meses[m])comData[fn].meses[m]=0;
+    comData[fn].meses[m]+=l.valor;
+    comData[fn].total+=l.valor;
   });
   _comissaoData=comData;
+  _vendedorToFornecedor=vendedorToFornecedor;
 
-  // Populate vendedor select
+  // Populate vendedor select — usar vendedor_nome dos contratos
   const sel=document.getElementById('comissaoVendedorSelect');
-  const sortedVendedores=[...vendedores].sort((a,b)=>(comData[b]?.total||0)-(comData[a]?.total||0));
+  const sortedVendedores=Object.entries(comData).sort((a,b)=>b[1].total-a[1].total).map(e=>e[0]);
   sel.innerHTML='<option value="">Todos os vendedores</option>'+sortedVendedores.map(v=>`<option value="${v}" ${v===_comissaoVendedor?'selected':''}>${v} (${fmt(comData[v]?.total||0)})</option>`).join('');
 
   renderComissaoView();
