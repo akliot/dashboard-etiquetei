@@ -5,6 +5,24 @@
 
 ---
 
+## 🔐 Segurança
+
+### Cloud Functions / APIs sem autenticação (31/03/2026 — propagado do Koti)
+**Problema:** Cloud Function com `--allow-unauthenticated` e sem middleware de auth → dados financeiros abertos.
+**Regra:** TODA API que serve dados sensíveis precisa de `_check_auth()` validando header `X-API-Key`. CORS ≠ autenticação.
+
+### Secrets em repos públicos (31/03/2026 — propagado do Koti)
+**Problema:** API key hardcoded no HTML de repo público → visível no source.
+**Regra:** NUNCA hardcodar secrets. Derivar em runtime via PBKDF2(senha, salt_api, 100K).
+
+### Autenticação client-side é cosmética (31/03/2026 — propagado do Koti)
+**Regra:** Validação no browser é UX. Autenticação REAL deve ser no servidor (API key no header).
+
+### Cache-Control em APIs sensíveis (31/03/2026 — propagado do Koti)
+**Regra:** Dados sensíveis → `Cache-Control: private`. Nunca `public`.
+
+---
+
 ## 🐛 Bugs e Armadilhas
 
 ### Template literals com ternário + CSS (29/03/2026)
@@ -63,9 +81,17 @@
 - A memória de cálculo cruza: receita real × % comissão × pago vs calculado
 
 ### PASS_HASH usa PBKDF2 (29/03/2026)
-- SHA-256 simples substituído por PBKDF2 (10K iterations + salt)
-- Salt: `etiquetei2026_salt_`
+- SHA-256 simples substituído por PBKDF2 (100K iterations + salt)
+- Salt login: `etiquetei2026_salt_`
+- Salt API key: `etiquetei2026_api_key_salt`
 - Gerar novo: `node -e "..."` (ver CLAUDE.md)
+- **Regra:** Mínimo 100K iterações. OWASP recomenda 600K+ (2024).
+
+### Derivação de API key da senha do usuário (31/03/2026)
+- Login: `PBKDF2(senha, salt_login, 100K)` → hash → compara client-side
+- API key: `PBKDF2(senha, salt_api, 100K)` → key → header `X-API-Key` server-side
+- Mesma senha, salts diferentes → keys independentes, ambas derivadas em runtime
+- **Regra:** NUNCA hardcodar API key em repo público. Derivar em runtime.
 
 ---
 
@@ -99,4 +125,4 @@
 
 ---
 
-*Última atualização: 30/03/2026*
+*Última atualização: 31/03/2026*
