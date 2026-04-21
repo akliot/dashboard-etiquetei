@@ -1193,13 +1193,27 @@ function renderFluxoCaixa(d){
     ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}},onClick:()=>{}},datalabels:{display:function(ctx){return ctx.datasetIndex>0&&ctx.dataset.data[ctx.dataIndex]>0},color:'#e2e8f0',font:{size:9,weight:500},formatter:v=>fmtK(v)}}}
   });
 
+  // Waterfall: Receitas Realizado vs A Realizar (por linha SaaS + Outros)
   const recArr=Object.values(tiposRec).filter(t=>t.done+t.open>0).sort((a,b)=>a.ordem-b.ordem);
+  const wfRecLabels=[...recArr.map(t=>t.nome),'Total'];
+  let wfRecRunning=0;
+  const wfRecBase=[];const wfRecDone=[];const wfRecOpen=[];
+  recArr.forEach(t=>{
+    wfRecBase.push(wfRecRunning);
+    wfRecDone.push(t.done);
+    wfRecOpen.push(t.open);
+    wfRecRunning+=t.done+t.open;
+  });
+  wfRecBase.push(0);
+  wfRecDone.push(recArr.reduce((s,t)=>s+t.done,0));
+  wfRecOpen.push(recArr.reduce((s,t)=>s+t.open,0));
   charts.receitasStack=new Chart(document.getElementById('chartReceitasStack'),{type:'bar',data:{
-    labels:recArr.map(t=>t.nome),
+    labels:wfRecLabels,
     datasets:[
-      {label:'Recebido',data:recArr.map(t=>t.done),backgroundColor:'#22c55ecc',borderRadius:3},
-      {label:'A Receber',data:recArr.map(t=>t.open),backgroundColor:'#22c55e44',borderRadius:3}
-    ]},options:stackOpts()
+      {label:'Base',data:wfRecBase,backgroundColor:'transparent',borderWidth:0,barPercentage:.6},
+      {label:'Recebido',data:wfRecDone,backgroundColor:wfRecLabels.map((l,i)=>i===wfRecLabels.length-1?'#22c55e':'#22c55ecc'),borderRadius:3,barPercentage:.6},
+      {label:'A Receber',data:wfRecOpen,backgroundColor:wfRecLabels.map((l,i)=>i===wfRecLabels.length-1?'#22c55e66':'#22c55e44'),borderRadius:3,barPercentage:.6}
+    ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}},onClick:()=>{}},datalabels:{display:function(ctx){return ctx.datasetIndex>0&&ctx.dataset.data[ctx.dataIndex]>0},color:'#e2e8f0',font:{size:9,weight:500},formatter:v=>fmtK(v)}}}
   });
 
   // Saldos bancários + Tabela
