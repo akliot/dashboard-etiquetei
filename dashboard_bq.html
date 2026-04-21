@@ -127,6 +127,17 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .dre-wrap tr.dre-final td{background:rgba(167,139,250,.08);font-weight:800;border-top:2px solid rgba(167,139,250,.4);border-bottom:2px solid rgba(167,139,250,.4);font-size:13.5px}
 .dre-wrap .deduct{color:#FF8A8A}
 .dre-wrap .total-col{border-left:2px solid rgba(255,255,255,.12);font-weight:600}
+/* Geografia */
+.geo-grid{display:flex;flex-direction:column;gap:10px}
+.geo-region{display:flex;gap:12px;align-items:center}
+.geo-region .region-label{min-width:120px;font-size:10.5px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+.geo-region .tiles{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.geo-tile{min-width:66px;padding:10px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.08);text-align:center;transition:all .2s;position:relative}
+.geo-tile:hover{transform:translateY(-2px);border-color:rgba(74,144,255,.5);z-index:2}
+.geo-tile .code{font-weight:700;font-size:13px;color:rgba(255,255,255,.95)}
+.geo-tile .val{font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;font-family:'JetBrains Mono',monospace}
+.geo-tile .clientes-count{font-size:9px;color:rgba(255,255,255,.5);margin-top:1px}
+.geo-tile.zero{opacity:.25}
 /* Visão Geral — Premium Design */
 #page-visao-geral{font-family:'DM Sans',system-ui,sans-serif}
 #page-visao-geral .vg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
@@ -207,7 +218,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
   <button class="tab" data-tab="fluxo-caixa">Fluxo de Caixa</button>
   <button class="tab" data-tab="financeiro">Resultado</button>
   <button class="tab" data-tab="vendas">Receitas</button>
-  <button class="tab" data-tab="projetos">Projetos</button>
+  <button class="tab" data-tab="projetos">Geografia</button>
   <button class="tab" data-tab="contratos">Contratos</button>
   <button class="tab" data-tab="cobranca">Cobrança</button>
 </div>
@@ -327,27 +338,26 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
     </div>
 
-    <!-- PROJETOS -->
+    <!-- GEOGRAFIA -->
     <div class="page" id="page-projetos">
 
       <div class="kpi-row" id="kpi-projetos"></div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Top Projetos por Receita <span class="regime-badge competencia">Competência</span></h3><div class="chart-container" style="height:320px"><canvas id="chartTopProjRec"></canvas></div><p class="chart-note">Dados all-time dos projetos ativos no período</p></div>
-        <div class="chart-card"><h3>Top Projetos por Despesa <span class="regime-badge competencia">Competência</span></h3><div class="chart-container" style="height:320px"><canvas id="chartTopProjDesp"></canvas></div><p class="chart-note">Dados all-time dos projetos ativos no período</p></div>
-      </div>
-      <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
-          <h3>Receita vs Margem % (&gt; R$ 70K) <span class="regime-badge competencia">Competência</span></h3>
-          <div class="chart-container" style="height:360px"><canvas id="chartMargemScatter"></canvas></div>
-          <p class="chart-note">Dados acumulados all-time do projeto. Filtro de datas seleciona quais projetos exibir.</p>
+          <h3>Mapa do Brasil — Receita por Estado <span class="regime-badge caixa">Caixa</span></h3>
+          <div id="geoMap" style="min-height:380px;padding:16px 0"></div>
+          <p class="chart-note">Receita operacional por UF no período. Intensidade da cor = volume relativo. Dados reais — cobertura SaaS.</p>
         </div>
       </div>
       <div class="chart-row">
+        <div class="chart-card"><h3>Top UFs por Receita <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container" style="height:340px"><canvas id="chartGeoTop"></canvas></div><p class="chart-note">Ranking de estados por receita operacional</p></div>
+        <div class="chart-card"><h3>Ticket Médio por UF <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container" style="height:340px"><canvas id="chartGeoTicket"></canvas></div><p class="chart-note">Receita ÷ nº clientes ativos no estado</p></div>
+      </div>
+      <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
-          <h3>Detalhamento por Projeto <span class="regime-badge competencia">Competência</span></h3>
-          <input type="text" class="search-input" id="projetoBusca" placeholder="🔍 Buscar projeto..." oninput="filtrarProjetos()">
-          <div class="proj-table" id="projetoDetalhe"></div>
-          <p class="chart-note">Competência, dados all-time</p>
+          <h3>Detalhamento por UF <span class="regime-badge caixa">Caixa</span></h3>
+          <div class="proj-table" id="geoTabela"></div>
+          <p class="chart-note">Clientes sem UF cadastrada aparecem como '—'. Junta lançamentos do período com cadastro atual de clientes.</p>
         </div>
       </div>
     </div>
@@ -2218,74 +2228,93 @@ function filtrarCobranca(){
 
 // ============ PROJETOS ============
 function renderProjetos(dc){
-  // 1. Identificar projetos com atividade no período filtrado (competência)
-  const porProjPeriodo=dc?dc.porProj:{};
-  if(!dc){dadosFiltrados.lancamentos.forEach(l=>{if(!l.projeto)return;const k=l.projeto;if(!porProjPeriodo[k])porProjPeriodo[k]={nome:l.projeto_nome};});}
-  const projIds=new Set(Object.keys(porProjPeriodo));
-
-  // 2. Calcular dados all-time desses projetos (dadosOriginal, sem filtro de data)
-  const porProj={};
-  (dadosOriginal.lancamentos||[]).forEach(l=>{
-    if(!l.projeto||!projIds.has(String(l.projeto)))return;
-    const k=l.projeto;
-    if(!porProj[k])porProj[k]={nome:l.projeto_nome||porProjPeriodo[k]?.nome||k,entrada:0,saida:0,ent_sk:0,ent_fd:0,sai_sk:0,sai_fd:0};
-    const fd=l.is_fd;
-    if(l.tipo==='entrada'){porProj[k].entrada+=l.valor;if(fd)porProj[k].ent_fd+=l.valor;else porProj[k].ent_sk+=l.valor}
-    else{porProj[k].saida+=l.valor;if(fd)porProj[k].sai_fd+=l.valor;else porProj[k].sai_sk+=l.valor}
+  // Aggregate receita operacional por cliente no período, joinando com estado
+  const estadoMap=(dadosOriginal.clientes||{}).estado_por_id||{};
+  const porCliente={};
+  dadosFiltrados.lancamentos.forEach(l=>{
+    if(!isRecOp(l))return;
+    const cid=l.cliente_id!=null?String(l.cliente_id):null;
+    if(!cid)return;
+    if(!porCliente[cid])porCliente[cid]={receita:0};
+    porCliente[cid].receita+=l.valor;
   });
-  const projs=Object.entries(porProj);
-  const tR=projs.reduce((s,e)=>s+e[1].entrada,0),tD=projs.reduce((s,e)=>s+e[1].saida,0);
-  document.getElementById('kpi-projetos').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Projetos</div><div class="kpi-value blue">${projs.length}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Receita Total</div><div class="kpi-value green">${fmt(tR)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Despesa Total</div><div class="kpi-value red">${fmt(tD)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Resultado</div><div class="kpi-value ${tR-tD>=0?'green':'red'}">${fmt(tR-tD)}</div></div>`;
-  const topR=projs.filter(e=>e[1].entrada>0).sort((a,b)=>b[1].entrada-a[1].entrada).slice(0,10);
-  charts.tPR=new Chart(document.getElementById('chartTopProjRec'),{type:'bar',data:{labels:topR.map(e=>e[1].nome.substring(0,35)),datasets:[{data:topR.map(e=>e[1].entrada),backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1}]},options:hBarOpts()});
-  const topD=projs.filter(e=>e[1].saida>0).sort((a,b)=>b[1].saida-a[1].saida).slice(0,10);
-  charts.tPD=new Chart(document.getElementById('chartTopProjDesp'),{type:'bar',data:{labels:topD.map(e=>e[1].nome.substring(0,35)),datasets:[{data:topD.map(e=>e[1].saida),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1}]},options:hBarOpts()});
-  // Scatter: Margem por Projeto (receita >= 70K)
-  const scatterData=projs.filter(e=>e[1].entrada>=70000&&!/\betiquetei\b/i.test(e[1].nome)).map(([id,p])=>{
-    const mg=p.entrada>0?((p.entrada-p.saida)/p.entrada*100):0;
-    const color=mg>=20?'#22c55e':mg>=0?'#eab308':'#ef4444';
-    const maxRec=Math.max(...projs.filter(e=>e[1].entrada>=70000).map(e=>e[1].entrada),1);
-    const radius=6+Math.round((p.entrada/maxRec)*12);
-    return{x:p.entrada,y:Math.round(mg*10)/10,nome:p.nome,despesa:p.saida,color,radius};
+  const porEstado={};
+  Object.keys(porCliente).forEach(cid=>{
+    const uf=estadoMap[cid]||'—';
+    if(!porEstado[uf])porEstado[uf]={receita:0,clientes:0};
+    porEstado[uf].receita+=porCliente[cid].receita;
+    porEstado[uf].clientes+=1;
   });
-  if(scatterData.length>0){
-    const refLines={id:'refLines',afterDraw:function(chart){const yScale=chart.scales.y,ctx=chart.ctx,left=chart.chartArea.left,right=chart.chartArea.right;
-      [[0,'#ef4444','Break-even'],[20,'#22c55e','Margem 20%']].forEach(function(ref){
-        const yPx=yScale.getPixelForValue(ref[0]);if(yPx<chart.chartArea.top||yPx>chart.chartArea.bottom)return;
-        ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle=ref[1]+'66';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(left,yPx);ctx.lineTo(right,yPx);ctx.stroke();
-        ctx.fillStyle=ref[1]+'99';ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText(ref[2],left+4,yPx-5);ctx.restore();
-      });}};
-    charts.mScatter=new Chart(document.getElementById('chartMargemScatter'),{type:'scatter',data:{datasets:[{data:scatterData.map(d=>({x:d.x,y:d.y})),backgroundColor:scatterData.map(d=>d.color+'cc'),borderColor:scatterData.map(d=>d.color),borderWidth:1.5,pointRadius:scatterData.map(d=>d.radius),pointHoverRadius:scatterData.map(d=>d.radius+3)}]},plugins:[refLines],options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{display:true,color:'#e2e8f0',font:{size:9,weight:500},anchor:'end',align:'top',offset:4,formatter:function(v,ctx){return scatterData[ctx.dataIndex].nome.substring(0,20)}},tooltip:{callbacks:{label:function(ctx){const d=scatterData[ctx.dataIndex];return[d.nome,'Receita: R$ '+(d.x/1000).toFixed(0)+'K','Despesa: R$ '+(d.despesa/1000).toFixed(0)+'K','Margem: '+d.y+'%']}}}},scales:{x:{title:{display:true,text:'Receita (R$)',color:'#94a3b8',font:{size:11}},ticks:{color:'#94a3b8',callback:v=>'R$ '+(v/1000).toFixed(0)+'K'},grid:{color:'#33415522'}},y:{title:{display:true,text:'Margem %',color:'#94a3b8',font:{size:11}},ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'#33415522'}}}}});
-  }
+  const estados=Object.entries(porEstado).sort((a,b)=>b[1].receita-a[1].receita);
+  const totalRec=estados.reduce((s,e)=>s+e[1].receita,0);
+  const totalCli=estados.reduce((s,e)=>s+e[1].clientes,0);
+  const topUf=estados[0];
+  const concentraSP=porEstado['SP']?(porEstado['SP'].receita/totalRec*100):0;
+  // HHI (Herfindahl–Hirschman) em escala 0-1 — > 0.25 = alta concentração
+  const hhi=estados.reduce((s,e)=>{const p=totalRec>0?e[1].receita/totalRec:0;return s+p*p},0);
+  const hhiLabel=hhi>0.5?'Muito Alta':hhi>0.25?'Alta':hhi>0.15?'Moderada':'Baixa';
+  const hhiColor=hhi>0.5?'red':hhi>0.25?'yellow':'green';
 
-  allProjData=projs.sort((a,b)=>(b[1].entrada-b[1].saida)-(a[1].entrada-a[1].saida)).map(([id,p])=>({id,...p}));
-  document.getElementById('projetoBusca').value='';
-  renderProjetoTabela(allProjData);
-}
+  document.getElementById('kpi-projetos').innerHTML=
+    '<div class="kpi-card"><div class="kpi-label">UFs atendidas</div><div class="kpi-value blue">'+estados.filter(e=>e[0]!=='—').length+'</div><div class="kpi-sub">'+totalCli+' clientes ativos no período</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Top UF</div><div class="kpi-value green">'+(topUf?topUf[0]:'—')+'</div><div class="kpi-sub">'+(topUf?fmt(topUf[1].receita)+' · '+topUf[1].clientes+' clientes':'sem dados')+'</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Concentração SP</div><div class="kpi-value '+(concentraSP>80?'red':concentraSP>50?'yellow':'green')+'">'+concentraSP.toFixed(0)+'%</div><div class="kpi-sub">da receita do período</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">HHI — Concentração</div><div class="kpi-value '+hhiColor+'">'+hhi.toFixed(2)+'</div><div class="kpi-sub">'+hhiLabel+' — >0.25 é alta</div></div>';
 
-function filtrarProjetos(){
-  const q=document.getElementById('projetoBusca').value.toLowerCase();
-  const filtered=q?allProjData.filter(p=>p.nome.toLowerCase().includes(q)):allProjData;
-  renderProjetoTabela(filtered);
-}
-
-function renderProjetoTabela(data){
-  let h='<table><thead><tr><th>Projeto</th><th style="text-align:right">Receita SK</th><th style="text-align:right">Receita FD</th><th style="text-align:right">Despesas SK</th><th style="text-align:right">Despesas FD</th><th style="text-align:right">Resultado</th><th style="text-align:right">Margem</th></tr></thead><tbody>';
-  let tEntSk=0,tEntFd=0,tSaiSk=0,tSaiFd=0;
-  data.forEach(p=>{
-    tEntSk+=p.ent_sk||0;tEntFd+=p.ent_fd||0;tSaiSk+=p.sai_sk||0;tSaiFd+=p.sai_fd||0;
-    const recTotal=p.entrada,r=p.entrada-p.saida,mg=recTotal>0?(r/recTotal*100).toFixed(1):p.saida>0?'-100':'0';
-    h+=`<tr><td>${p.nome}</td><td style="text-align:right" class="valor-entrada">${p.ent_sk?fmt(p.ent_sk):'-'}</td><td style="text-align:right" class="valor-entrada">${p.ent_fd?fmt(p.ent_fd):'-'}</td><td style="text-align:right" class="valor-saida">${p.sai_sk?fmt(p.sai_sk):'-'}</td><td style="text-align:right" class="valor-saida">${p.sai_fd?fmt(p.sai_fd):'-'}</td><td style="text-align:right;color:${r>=0?'var(--green)':'var(--red)'}"><strong>${fmt(r)}</strong></td><td style="text-align:right;color:${r>=0?'var(--green)':'var(--red)'}">${mg}%</td></tr>`;
+  // ---- Heatmap "mapa" — tiles por UF agrupados por região ----
+  const REGIOES=[
+    ['Norte',['AC','AM','AP','PA','RO','RR','TO']],
+    ['Nordeste',['AL','BA','CE','MA','PB','PE','PI','RN','SE']],
+    ['Centro-Oeste',['DF','GO','MT','MS']],
+    ['Sudeste',['ES','MG','RJ','SP']],
+    ['Sul',['PR','RS','SC']]
+  ];
+  const maxRec=estados.reduce((m,e)=>Math.max(m,e[1].receita),0);
+  const tileColor=v=>{
+    if(v<=0||maxRec<=0)return 'rgba(255,255,255,.03)';
+    const t=Math.log(1+v)/Math.log(1+maxRec);
+    // Gradient: low=dark blue, high=bright blue
+    const alpha=Math.max(0.15,t);
+    return 'rgba(74,144,255,'+alpha.toFixed(2)+')';
+  };
+  let geoHtml='';
+  REGIOES.forEach(([regNome,ufs])=>{
+    geoHtml+='<div class="geo-region"><div class="region-label">'+regNome+'</div><div class="tiles">';
+    ufs.forEach(uf=>{
+      const d=porEstado[uf]||{receita:0,clientes:0};
+      const zero=d.receita<=0?' zero':'';
+      const valTxt=d.receita>0?fmtK(d.receita):'—';
+      const cliTxt=d.clientes>0?d.clientes+(d.clientes===1?' cliente':' clientes'):'sem dados';
+      geoHtml+='<div class="geo-tile'+zero+'" style="background:'+tileColor(d.receita)+'" title="'+uf+' · '+fmt(d.receita)+' · '+cliTxt+'"><div class="code">'+uf+'</div><div class="val">'+valTxt+'</div><div class="clientes-count">'+d.clientes+' 👤</div></div>';
+    });
+    geoHtml+='</div></div>';
   });
-  const tRec=tEntSk+tEntFd,tSai=tSaiSk+tSaiFd,tRes=tRec-tSai,tMg=tRec>0?(tRes/tRec*100).toFixed(1):'0';
-  h+=`<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td style="text-align:right" class="valor-entrada">${fmt(tEntSk)}</td><td style="text-align:right" class="valor-entrada">${fmt(tEntFd)}</td><td style="text-align:right" class="valor-saida">${fmt(tSaiSk)}</td><td style="text-align:right" class="valor-saida">${fmt(tSaiFd)}</td><td style="text-align:right;color:${tRes>=0?'var(--green)':'var(--red)'}">${fmt(tRes)}</td><td style="text-align:right;color:${tRes>=0?'var(--green)':'var(--red)'}">${tMg}%</td></tr>`;
-  h+=`</tbody></table>`;
-  if(!data.length) h='<p style="text-align:center;color:var(--muted);padding:24px">Nenhum projeto encontrado</p>';
-  document.getElementById('projetoDetalhe').innerHTML=h;
+  document.getElementById('geoMap').innerHTML=geoHtml;
+
+  // ---- Bar chart: Top 10 UFs por Receita ----
+  if(charts.geoTop){charts.geoTop.destroy();delete charts.geoTop}
+  const topEstados=estados.filter(e=>e[0]!=='—').slice(0,10);
+  charts.geoTop=new Chart(document.getElementById('chartGeoTop'),{type:'bar',
+    data:{labels:topEstados.map(e=>e[0]),datasets:[{data:topEstados.map(e=>e[1].receita),backgroundColor:'#4A90FFaa',borderColor:'#4A90FF',borderWidth:1,borderRadius:4}]},
+    options:hBarOpts()});
+
+  // ---- Bar chart: Ticket Médio por UF (top 10 por receita) ----
+  if(charts.geoTicket){charts.geoTicket.destroy();delete charts.geoTicket}
+  const topTicket=topEstados.map(e=>({uf:e[0],ticket:e[1].clientes>0?e[1].receita/e[1].clientes:0}));
+  charts.geoTicket=new Chart(document.getElementById('chartGeoTicket'),{type:'bar',
+    data:{labels:topTicket.map(e=>e.uf),datasets:[{data:topTicket.map(e=>e.ticket),backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,borderRadius:4}]},
+    options:hBarOpts()});
+
+  // ---- Tabela detalhada ----
+  let tblHtml='<table><thead><tr><th>UF</th><th style="text-align:right">Clientes</th><th style="text-align:right">Receita</th><th style="text-align:right">% do Total</th><th style="text-align:right">Ticket Médio</th></tr></thead><tbody>';
+  estados.forEach(([uf,d])=>{
+    const pctStr=totalRec>0?(d.receita/totalRec*100).toFixed(1)+'%':'—';
+    const ticket=d.clientes>0?fmt(d.receita/d.clientes):'—';
+    tblHtml+='<tr><td><strong>'+uf+'</strong></td><td style="text-align:right">'+d.clientes+'</td><td style="text-align:right" class="valor-entrada">'+fmt(d.receita)+'</td><td style="text-align:right">'+pctStr+'</td><td style="text-align:right">'+ticket+'</td></tr>';
+  });
+  tblHtml+='<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td style="text-align:right">'+totalCli+'</td><td style="text-align:right" class="valor-entrada">'+fmt(totalRec)+'</td><td style="text-align:right">100%</td><td style="text-align:right">'+(totalCli>0?fmt(totalRec/totalCli):'—')+'</td></tr>';
+  tblHtml+='</tbody></table>';
+  document.getElementById('geoTabela').innerHTML=tblHtml;
 }
 
 // ============================================================
