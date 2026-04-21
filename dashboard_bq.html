@@ -213,13 +213,13 @@ tr:hover td{background:rgba(74,144,255,.04)}
     <div class="page active" id="page-visao-geral">
       <div class="vg-grid" id="vg-kpis"></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
-        <div class="vg-spark"><h4>Receita vs Despesa (6m)</h4><div style="height:120px"><canvas id="sparkRecDesp"></canvas></div><p class="chart-note">Caixa — operacional (exclui empréstimos, FD, financeiras, CAPEX, devoluções)</p></div>
-        <div class="vg-spark"><h4>Variação de Caixa % (6m)</h4><div style="height:120px"><canvas id="sparkVarCaixa"></canvas></div><p class="chart-note">Caixa. (Entradas − Saídas) ÷ Entradas × 100</p></div>
-        <div class="vg-spark"><h4>Saldo Bancário (6m)</h4><div style="height:120px"><canvas id="sparkCaixa"></canvas></div><p class="chart-note">Saldo real conciliado por mês</p></div>
+        <div class="vg-spark"><h4>Receita vs Despesa</h4><div style="height:120px"><canvas id="sparkRecDesp"></canvas></div><p class="chart-note">Caixa — operacional (exclui empréstimos, FD, financeiras, CAPEX, devoluções)</p></div>
+        <div class="vg-spark"><h4>Variação de Caixa %</h4><div style="height:120px"><canvas id="sparkVarCaixa"></canvas></div><p class="chart-note">Caixa. (Entradas − Saídas) ÷ Entradas × 100</p></div>
+        <div class="vg-spark"><h4>Saldo Bancário</h4><div style="height:120px"><canvas id="sparkCaixa"></canvas></div><p class="chart-note">Saldo real conciliado por mês</p></div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:24px">
-        <div class="vg-spark"><h4>Faturamento (6m)</h4><div style="height:160px"><canvas id="sparkFat"></canvas></div><p class="chart-note">Competência. Receita operacional (exclui empréstimos, FD, devoluções, rendimentos, receita a identificar)</p></div>
-        <div class="vg-spark"><h4>EBITDA (6m) <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setEbitdaMode('real',this)" class="active" style="font-size:9px;padding:2px 6px">Imp Real</button><button onclick="setEbitdaMode('teorico',this)" style="font-size:9px;padding:2px 6px">Imp 11%</button></div></h4><div style="height:160px"><canvas id="sparkEbitda"></canvas></div><p class="chart-note" id="ebitdaNote">Competência D-1. ISS + COFINS deslocados 1 mês.</p></div>
+        <div class="vg-spark"><h4>Faturamento</h4><div style="height:160px"><canvas id="sparkFat"></canvas></div><p class="chart-note">Competência. Receita operacional (exclui empréstimos, FD, devoluções, rendimentos, receita a identificar)</p></div>
+        <div class="vg-spark"><h4>EBITDA <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setEbitdaMode('real',this)" class="active" style="font-size:9px;padding:2px 6px">Imp Real</button><button onclick="setEbitdaMode('teorico',this)" style="font-size:9px;padding:2px 6px">Imp 11%</button></div></h4><div style="height:160px"><canvas id="sparkEbitda"></canvas></div><p class="chart-note" id="ebitdaNote">Competência D-1. ISS + COFINS deslocados 1 mês.</p></div>
       </div>
       <div class="vg-alerts" id="vg-alerts"></div>
     </div>
@@ -505,6 +505,7 @@ document.addEventListener('keydown',e=>{
 
 // ============ BOTÕES DE PERÍODO ============
 function setPeriodo(tipo,el){
+  _periodoTipo=tipo;
   const hoje=new Date();
   let de,ate;
   if(tipo==='mes'){de=new Date(hoje.getFullYear(),hoje.getMonth(),1);ate=new Date(hoje.getFullYear(),hoje.getMonth()+1,0)}
@@ -684,8 +685,60 @@ function renderFluxoMod(){
 let _saldoContaMode='d1';
 let _ebitdaMode='real';
 let _recMesMode='caixa';
+let _periodoTipo='personalizado';
 function setEbitdaMode(mode,el){_ebitdaMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
 function setRecMesMode(mode,el){_recMesMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
+
+// Gera lista de meses YYYY-MM entre filterDe e filterAte (inclusive)
+function gerarMesesPeriodo(){
+  const de=new Date(document.getElementById('filterDe').value+'T00:00:00');
+  const ate=new Date(document.getElementById('filterAte').value+'T00:00:00');
+  if(isNaN(de)||isNaN(ate))return[];
+  const result=[];
+  let cur=new Date(de.getFullYear(),de.getMonth(),1);
+  const end=new Date(ate.getFullYear(),ate.getMonth(),1);
+  while(cur<=end){
+    result.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
+    cur.setMonth(cur.getMonth()+1);
+  }
+  return result;
+}
+
+// Janela do período anterior equivalente
+function getPrevPeriodo(){
+  const de=new Date(document.getElementById('filterDe').value+'T00:00:00');
+  const ate=new Date(document.getElementById('filterAte').value+'T23:59:59');
+  if(_periodoTipo==='mes'){
+    return{de:new Date(de.getFullYear(),de.getMonth()-1,1),ate:new Date(de.getFullYear(),de.getMonth(),0,23,59,59)};
+  }
+  if(_periodoTipo==='tri'){
+    return{de:new Date(de.getFullYear(),de.getMonth()-3,1),ate:new Date(de.getFullYear(),de.getMonth(),0,23,59,59)};
+  }
+  if(_periodoTipo==='ano'||_periodoTipo==='ytd'){
+    return{de:new Date(de.getFullYear()-1,de.getMonth(),de.getDate()),ate:new Date(ate.getFullYear()-1,ate.getMonth(),ate.getDate(),23,59,59)};
+  }
+  const dur=ate-de;
+  return{de:new Date(de.getTime()-dur-24*3600*1000),ate:new Date(de.getTime()-1)};
+}
+
+// Soma entradas do dadosOriginal numa janela [de,ate], aplicando regime
+function somarEntradasPeriodo(de,ate,mode){
+  let total=0;
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='entrada')return;
+    const dtStr=mode==='competencia'?l.data_vencimento:l.data;
+    if(!dtStr)return;
+    const dt=parseDate(dtStr);
+    if(!dt)return;
+    if(mode==='competencia'&&l.status==='ATRASADO')return;
+    if(dt<de||dt>ate)return;
+    total+=l.valor;
+  });
+  return total;
+}
+
+const PERIODO_LABEL={mes:'Mês',tri:'Trimestre',ano:'Ano',ytd:'YTD',all:'Período',personalizado:'Período'};
+const PERIODO_COMPARE={mes:'vs mês anterior',tri:'vs tri anterior',ano:'vs ano anterior',ytd:'vs YTD anterior',all:'',personalizado:'vs período anterior'};
 
 function setSaldoContaMode(mode,el){
   _saldoContaMode=mode;
@@ -766,16 +819,20 @@ function renderVisaoGeral(d,dc){
   const saldoTotal=(dadosFiltrados.saldos_bancarios||[]).reduce((s,b)=>s+b.saldo,0);
 
   // Mês corrente vs anterior — usar mês real (hoje) ou último mês com receita > 0
-  const meses=Object.keys(d.porMes).sort();
+  const mesesPeriodo=gerarMesesPeriodo();
+  const meses=mesesPeriodo.length?mesesPeriodo:Object.keys(d.porMes).sort();
   const hoje=new Date();
   const mesHoje=`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  // Usar mês atual se existe no dataset, senão o último mês com receita > 0
-  let mesAtual=meses.includes(mesHoje)?mesHoje:meses.filter(m=>(d.porMes[m]?.entrada||0)>0).pop()||meses[meses.length-1]||'';
+  // Último mês do período filtrado (ou mês atual se estiver no range, ou último com dados)
+  const ultimoDoPeriodo=meses[meses.length-1]||'';
+  let mesAtual=meses.includes(mesHoje)?mesHoje:ultimoDoPeriodo;
   const mesIdx=meses.indexOf(mesAtual);
   const mesAnt=mesIdx>0?meses[mesIdx-1]:'';
   const _pmRec=_recMesMode==='competencia'?(dc?dc.porMes:d.porMes):d.porMes;
-  const recMes=_pmRec[mesAtual]?.entrada||0;
-  const recMesAnt=_pmRec[mesAnt]?.entrada||0;
+  // Receita do PERÍODO filtrado inteiro (acumulado, não só um mês)
+  const recMes=_recMesMode==='competencia'?(dc?dc.tE:0):d.tE;
+  const prevWindow=getPrevPeriodo();
+  const recMesAnt=somarEntradasPeriodo(prevWindow.de,prevWindow.ate,_recMesMode);
   const despMes=d.porMes[mesAtual]?.saida||0;
 
   // Receita e despesa operacional por mês (competência)
@@ -816,7 +873,7 @@ function renderVisaoGeral(d,dc){
 
   // KPIs
   document.getElementById('vg-kpis').innerHTML=`
-    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita Mês <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">vs mês anterior ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
+    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita ${PERIODO_LABEL[_periodoTipo]||'Período'} <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">${PERIODO_COMPARE[_periodoTipo]||''} ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
     <div class="vg-kpi ${resultado>=0?'bar-green':'bar-red'}"><div class="vg-lbl">Resultado Operacional</div><div class="vg-val" style="color:${resultado>=0?'#3DDC97':'#FF6B6B'}">${fmt(resultado)}</div><div class="vg-sub">Margem ${margem}%</div><p class="chart-note">Competência. Rec. op. − Desp. op. (exclui financeiras, CAPEX, IRPJ/CSLL, empréstimos)</p></div>
     <div class="vg-kpi bar-cyan"><div class="vg-lbl">Caixa Total</div><div class="vg-val" style="color:#2DD4BF">${fmt(saldoTotal)}</div><div class="vg-sub">${varSaldo!=='--'?(Number(varSaldo)>=0?'↑':'↓')+Math.abs(varSaldo)+'% vs mês ant':'--'}</div></div>
     <div class="vg-kpi ${corRunway}"><div class="vg-lbl">Meses de Caixa</div><div class="vg-val" style="color:${corRunwayTxt}">${runwayTxt}</div><div class="vg-sub">meses de operação</div><p class="chart-note">Saldo ÷ média despesas 3m</p></div>
@@ -826,7 +883,8 @@ function renderVisaoGeral(d,dc){
   // Sparklines (últimos 6 meses)
   const sparkDL={display:ctx=>ctx.dataset.data[ctx.dataIndex]!==0,color:'rgba(255,255,255,.6)',font:{family:'JetBrains Mono',size:9,weight:500},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(Math.abs(v))};
   const sparkOpts={responsive:true,maintainAspectRatio:false,scales:{x:{display:false},y:{display:false}},plugins:{legend:{display:false},datalabels:sparkDL,tooltip:{enabled:false}},elements:{point:{radius:0}}};
-  const m6=meses.filter(m=>m<=mesAtual).slice(-6);
+  // m6 = meses do período filtrado (não mais fixo em 6 meses)
+  const m6=meses.slice();
 
   // Spark 1: Receita vs Despesa (caixa, operacional — mesmo escopo do Faturamento competência)
   const recCxPorMes={},despCxPorMes={};
