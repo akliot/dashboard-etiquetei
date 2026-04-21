@@ -427,6 +427,15 @@ const cores=['#3b82f6','#22c55e','#ef4444','#eab308','#a855f7','#06b6d4','#f9731
 const parseDate=d=>{try{const[dd,mm,yy]=d.split('/');return new Date(yy,mm-1,dd)}catch{return null}};
 const toYM=d=>{try{const[dd,mm,yy]=d.split('/');return `${yy}-${mm}`}catch{return null}};
 
+// Categorias excluídas da "Receita Operacional" (cat completa, 3 níveis):
+//  1.01.99 a identificar · 1.02.02 rendimentos · 1.03.* devoluções · 1.04.01-03 recebimento indevido/FD/empréstimos
+const REC_OP_EXCLUIR=new Set(['1.01.99','1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
+// Grupos (2 níveis) excluídos da "Despesa Operacional":
+//  2.05 financeiras · 2.07 CAPEX · 2.08 IRPJ/CSLL · 2.09 devoluções · 2.10 empréstimos · 2.11 outros não-op
+const DESP_OP_EXCLUIR=new Set(['2.05','2.07','2.08','2.09','2.10','2.11']);
+const isRecOp=l=>l.tipo==='entrada'&&!REC_OP_EXCLUIR.has(l.categoria);
+const isDespOp=l=>l.tipo==='saida'&&!DESP_OP_EXCLUIR.has(getGrupo(l.categoria));
+
 // YoY: mesmo mês do ano anterior
 function getYoYMonth(mes){const[y,m]=mes.split('-');return(parseInt(y)-1)+'-'+m}
 
@@ -602,7 +611,12 @@ function compute(){
   // Ordenar grupos por valor total (desc) e pegar os top para charts
   const finGruposArr=Object.entries(finGrupos).sort((a,b)=>b[1].total-a[1].total);
 
-  return{tE,tS,rec,pag,abRec,abPag,vRec,vPag,avRec,avPag,porMes,porCat,porProj,porCliente,gruposDesp,gruposRec,ent,sai,finGrupos,finGruposArr,finMesAll};
+  // Receita/Despesa Operacional (exclui categorias não-op) + por mês
+  const tERecOp=ent.filter(isRecOp).reduce((s,l)=>s+l.valor,0);
+  const tSDespOp=sai.filter(isDespOp).reduce((s,l)=>s+l.valor,0);
+  const porMesOp={};L.forEach(l=>{const m=toYM(l.data);if(!m)return;if(!porMesOp[m])porMesOp[m]={entrada:0,saida:0};if(isRecOp(l))porMesOp[m].entrada+=l.valor;else if(isDespOp(l))porMesOp[m].saida+=l.valor});
+
+  return{tE,tS,tERecOp,tSDespOp,rec,pag,abRec,abPag,vRec,vPag,avRec,avPag,porMes,porMesOp,porCat,porProj,porCliente,gruposDesp,gruposRec,ent,sai,finGrupos,finGruposArr,finMesAll};
 }
 
 function computeCompetencia(){
@@ -634,7 +648,13 @@ function computeCompetencia(){
   const abPag=allL.filter(l=>l.tipo==='saida'&&!isDone(l.status)).reduce((s,l)=>s+l.valor,0);
   const vRec=allL.filter(l=>l.tipo==='entrada'&&l.status==='ATRASADO').reduce((s,l)=>s+l.valor,0);
   const vPag=allL.filter(l=>l.tipo==='saida'&&l.status==='ATRASADO').reduce((s,l)=>s+l.valor,0);
-  return{tE,tS,ent,sai,porMes,porProj,porCliente,finGrupos,finGruposArr,finMesAll,abRec,abPag,vRec,vPag,L};
+
+  // Receita/Despesa Operacional (exclui não-op) + por mês
+  const tERecOp=ent.filter(isRecOp).reduce((s,l)=>s+l.valor,0);
+  const tSDespOp=sai.filter(isDespOp).reduce((s,l)=>s+l.valor,0);
+  const porMesOp={};L.forEach(l=>{const m=toYM(l.data_vencimento||l.data);if(!m)return;if(!porMesOp[m])porMesOp[m]={entrada:0,saida:0};if(isRecOp(l))porMesOp[m].entrada+=l.valor;else if(isDespOp(l))porMesOp[m].saida+=l.valor});
+
+  return{tE,tS,tERecOp,tSDespOp,ent,sai,porMes,porMesOp,porProj,porCliente,finGrupos,finGruposArr,finMesAll,abRec,abPag,vRec,vPag,L};
 }
 
 let _fluxoModData=null,_fluxoModMode='total';
@@ -849,17 +869,13 @@ function renderVisaoGeral(d,dc){
   const recMesAnt=somarEntradasPeriodo(prevWindow.de,prevWindow.ate,_recMesMode);
   const despMes=d.porMes[mesAtual]?.saida||0;
 
-  // Receita e despesa operacional por mês (competência)
-  //  Excluídas do lado entrada: 1.01.99 (a identificar), 1.02.02 (rendimentos), 1.03.* (devoluções), 1.04.01-03 (recebimento indevido, FD, empréstimos)
-  //  Excluídas do lado saída: 2.05 (financeiras), 2.07 (CAPEX), 2.08 (IRPJ/CSLL), 2.09 (devoluções), 2.10 (empréstimos), 2.11 (outros não-op)
-  const _recOpExcluir=new Set(['1.01.99','1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
-  const _despOpExcluir=new Set(['2.05','2.07','2.08','2.09','2.10','2.11']);
+  // Receita e despesa operacional por mês (competência). Usa helpers globais.
   const _dcL=dc?dc.L:dadosFiltrados.lancamentos;
   const recOpPorMes={},despOpPorMes={};let recOpTotal=0,despOpTotal=0;
   _dcL.forEach(l=>{
     const m=toYM(l.data_vencimento||l.data);if(!m)return;
-    if(l.tipo==='entrada'&&!_recOpExcluir.has(l.categoria)){recOpPorMes[m]=(recOpPorMes[m]||0)+l.valor;recOpTotal+=l.valor}
-    if(l.tipo==='saida'&&!_despOpExcluir.has(getGrupo(l.categoria))){despOpPorMes[m]=(despOpPorMes[m]||0)+l.valor;despOpTotal+=l.valor}
+    if(isRecOp(l)){recOpPorMes[m]=(recOpPorMes[m]||0)+l.valor;recOpTotal+=l.valor}
+    if(isDespOp(l)){despOpPorMes[m]=(despOpPorMes[m]||0)+l.valor;despOpTotal+=l.valor}
   });
   const resultado=recOpTotal-despOpTotal;
   const margem=recOpTotal>0?(resultado/recOpTotal*100).toFixed(1):'0';
@@ -900,15 +916,9 @@ function renderVisaoGeral(d,dc){
   // m6 = meses do período filtrado (não mais fixo em 6 meses)
   const m6=meses.slice();
 
-  // Spark 1: Receita vs Despesa (caixa, operacional — mesmo escopo do Faturamento competência)
-  const recCxPorMes={},despCxPorMes={};
-  dadosFiltrados.lancamentos.forEach(l=>{
-    const m=toYM(l.data);if(!m)return;
-    if(l.tipo==='entrada'&&!_recOpExcluir.has(l.categoria)){recCxPorMes[m]=(recCxPorMes[m]||0)+l.valor}
-    if(l.tipo==='saida'&&!_despOpExcluir.has(getGrupo(l.categoria))){despCxPorMes[m]=(despCxPorMes[m]||0)+l.valor}
-  });
-  const spk1Ent=m6.map(m=>recCxPorMes[m]||0);
-  const spk1Sai=m6.map(m=>-(despCxPorMes[m]||0));
+  // Spark 1: Receita vs Despesa (caixa, operacional — usa d.porMesOp do compute)
+  const spk1Ent=m6.map(m=>d.porMesOp?.[m]?.entrada||0);
+  const spk1Sai=m6.map(m=>-(d.porMesOp?.[m]?.saida||0));
   const spk1Max=Math.max(...spk1Ent)*1.35;
   const spk1Min=Math.min(...spk1Sai)*1.35;
   const spk1YoY=m6.map(m=>{const pm=getAllPorMes()[getYoYMonth(m)];return pm?pm.entrada:null});
@@ -1000,13 +1010,9 @@ function renderVisaoGeral(d,dc){
       {data:vcYoY,borderColor:'rgba(255,255,255,.2)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}]
   },options:{...sparkOpts,plugins:{...sparkOpts.plugins,datalabels:{...sparkDL,formatter:v=>v+'%'}},scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk4Max,suggestedMin:-spk4Max}}}});
 
-  // Spark 5: Faturamento (competência, só receita operacional)
-  const fatExcluir=new Set(['1.01.99','1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
+  // Spark 5: Faturamento (competência, só receita operacional — usa dc.porMesOp)
   const fatPorMes={};
-  dcL.filter(l=>l.tipo==='entrada'&&!fatExcluir.has(l.categoria)).forEach(l=>{
-    const m=toYM(l.data_vencimento||l.data);if(!m)return;
-    fatPorMes[m]=(fatPorMes[m]||0)+l.valor;
-  });
+  m6.forEach(m=>{fatPorMes[m]=dc?.porMesOp?.[m]?.entrada||0});
   const fatData=m6.map(m=>fatPorMes[m]||0);
   const spk5Max=Math.max(...fatData)*1.2;
   charts.spkFat=new Chart(document.getElementById('sparkFat'),{type:'bar',data:{
@@ -1024,7 +1030,7 @@ function renderVisaoGeral(d,dc){
     if(!l.data_vencimento)return;
     const dv=parseDate(l.data_vencimento);if(!dv)return;
     if(dv<deFI||dv>ateFI)return;
-    if(fatExcluir.has(l.categoria))return;
+    if(REC_OP_EXCLUIR.has(l.categoria))return;
     const m=toYM(l.data_vencimento);if(!m)return;
     inadBasePorMes[m]=(inadBasePorMes[m]||0)+l.valor;
     if(l.status==='ATRASADO'){inadAtrasadoPorMes[m]=(inadAtrasadoPorMes[m]||0)+l.valor}
@@ -1077,11 +1083,15 @@ function renderFluxoCaixa(d){
   _fluxoData=d;
   const pctRecRealizado=d.tE>0?((d.rec/d.tE)*100).toFixed(0):'0';
   const pctPagRealizado=d.tS>0?((d.pag/d.tS)*100).toFixed(0):'0';
+  const recOp=d.tERecOp||0, despOp=d.tSDespOp||0;
+  const deltaRec=d.tE-recOp, deltaDesp=d.tS-despOp;
+  const subRec=deltaRec>0?' · Bruta: '+fmt(d.tE):'';
+  const subDesp=deltaDesp>0?' · Bruta: '+fmt(d.tS):'';
   document.getElementById('kpi-fluxo').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Total Receitas</div><div class="kpi-value green">${fmt(d.tE)}</div><div class="kpi-sub">Recebido: ${fmt(d.rec)} (${pctRecRealizado}%) · A receber: ${fmt(d.abRec)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Total Despesas</div><div class="kpi-value red">${fmt(d.tS)}</div><div class="kpi-sub">Pago: ${fmt(d.pag)} (${pctPagRealizado}%) · A pagar: ${fmt(d.abPag)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Resultado</div><div class="kpi-value ${d.tE-d.tS>=0?'green':'red'}">${fmt(d.tE-d.tS)}</div><div class="kpi-sub">Realizado: ${fmt(d.rec-d.pag)} · A realizar: ${fmt(d.abRec-d.abPag)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Margem</div><div class="kpi-value blue">${d.tE>0?((d.tE-d.tS)/d.tE*100).toFixed(1):'0'}%</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">Receita Operacional</div><div class="kpi-value green">${fmt(recOp)}</div><div class="kpi-sub">Recebido: ${fmt(d.rec)} (${pctRecRealizado}%) · A receber: ${fmt(d.abRec)}${subRec}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Despesa Operacional</div><div class="kpi-value red">${fmt(despOp)}</div><div class="kpi-sub">Pago: ${fmt(d.pag)} (${pctPagRealizado}%) · A pagar: ${fmt(d.abPag)}${subDesp}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Resultado Operacional</div><div class="kpi-value ${recOp-despOp>=0?'green':'red'}">${fmt(recOp-despOp)}</div><div class="kpi-sub">Realizado: ${fmt(d.rec-d.pag)} · A realizar: ${fmt(d.abRec-d.abPag)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Margem Operacional</div><div class="kpi-value blue">${recOp>0?((recOp-despOp)/recOp*100).toFixed(1):'0'}%</div></div>`;
 
   // Charts — Receita vs Despesa, Saldo Acumulado, Variação %
   const fMeses=Object.keys(d.porMes).sort();
@@ -1355,14 +1365,18 @@ function renderFluxoTabela(d){
 
 // ============ FINANCEIRO (detalhado) ============
 function renderFinanceiro(d){
-  const lucro=d.tE-d.tS;
-  // KPIs: receita, total despesa, resultado, margem, e top 2 grupos de despesa
+  const recOp=d.tERecOp||0, despOp=d.tSDespOp||0;
+  const lucro=recOp-despOp;
+  // KPIs: receita op, total despesa op, resultado, margem, e top 2 grupos de despesa
   const top2=d.finGruposArr.slice(0,2);
+  const deltaRec=d.tE-recOp, deltaDesp=d.tS-despOp;
+  const subRec=deltaRec>0?' · Bruta: '+fmt(d.tE):'';
+  const subDesp=deltaDesp>0?' · Bruta: '+fmt(d.tS):'';
   document.getElementById('kpi-financeiro').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Receita Total</div><div class="kpi-value green">${fmt(d.tE)}</div><div class="kpi-sub">${d.ent.length} lançamentos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Despesa Total</div><div class="kpi-value red">${fmt(d.tS)}</div><div class="kpi-sub">${d.sai.length} lançamentos</div></div>
-    <div class="kpi-card"><div class="kpi-label">Resultado</div><div class="kpi-value ${lucro>=0?'green':'red'}">${fmt(lucro)}</div><div class="kpi-sub">Margem: ${d.tE>0?(lucro/d.tE*100).toFixed(1):'0'}%</div></div>
-    ${top2.map((g,i)=>`<div class="kpi-card"><div class="kpi-label">${g[1].nome.substring(0,30)}</div><div class="kpi-value" style="color:${cores[i+2]}">${fmt(g[1].total)}</div><div class="kpi-sub">${d.tE>0?(g[1].total/d.tE*100).toFixed(1):'0'}% da receita</div></div>`).join('')}
+    <div class="kpi-card"><div class="kpi-label">Receita Operacional</div><div class="kpi-value green">${fmt(recOp)}</div><div class="kpi-sub">${d.ent.length} lançamentos${subRec}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Despesa Operacional</div><div class="kpi-value red">${fmt(despOp)}</div><div class="kpi-sub">${d.sai.length} lançamentos${subDesp}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Resultado Operacional</div><div class="kpi-value ${lucro>=0?'green':'red'}">${fmt(lucro)}</div><div class="kpi-sub">Margem: ${recOp>0?(lucro/recOp*100).toFixed(1):'0'}%</div></div>
+    ${top2.map((g,i)=>`<div class="kpi-card"><div class="kpi-label">${g[1].nome.substring(0,30)}</div><div class="kpi-value" style="color:${cores[i+2]}">${fmt(g[1].total)}</div><div class="kpi-sub">${recOp>0?(g[1].total/recOp*100).toFixed(1):'0'}% da receita op.</div></div>`).join('')}
     <div class="kpi-card"><div class="kpi-label">A Receber (aberto)</div><div class="kpi-value blue">${fmt(d.abRec)}</div><div class="kpi-sub">Vencido: ${fmt(d.vRec)}</div></div>
     <div class="kpi-card"><div class="kpi-label">A Pagar (aberto)</div><div class="kpi-value yellow">${fmt(d.abPag)}</div><div class="kpi-sub">Vencido: ${fmt(d.vPag)}</div></div>`;
 
@@ -1505,7 +1519,7 @@ function renderVendas(dc){
 
   // KPIs
   document.getElementById('kpi-vendas').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Receita Total</div><div class="kpi-value green">${fmt(totalRec)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Receita SaaS</div><div class="kpi-value green">${fmt(totalRec)}</div><div class="kpi-sub">Mensalidade + Setup + Etiquetas + Locação + Comissionamento</div></div>
     <div class="kpi-card"><div class="kpi-label">MRR (Mensalidades)</div><div class="kpi-value cyan">${fmt(totalMRR)}</div></div>
     <div class="kpi-card"><div class="kpi-label">Receita Setup</div><div class="kpi-value blue">${fmt(totalSetup)}</div></div>
     <div class="kpi-card"><div class="kpi-label">Margem Bruta</div><div class="kpi-value ${margemBruta>=30?'green':margemBruta>=15?'yellow':'red'}">${margemBruta.toFixed(1)}%</div></div>`;
@@ -2283,11 +2297,10 @@ function gerarRelatorioPDF(){
   const despMes=d.porMes[mesAtual]?.saida||0;
   const varRec=recMesAnt>0?((recMes-recMesAnt)/recMesAnt*100):0;
 
-  // Receita operacional (competência)
-  const _recOpExcluir=new Set(['1.01.99','1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
+  // Receita e despesa operacional (competência) — usa helpers globais
   const _dcL=dc?dc.L:dadosFiltrados.lancamentos;
   const recOpPorMes={};let recOpTotal=0,despOpTotal=0;
-  _dcL.forEach(l=>{const m=toYM(l.data_vencimento||l.data);if(!m)return;if(l.tipo==='entrada'&&!_recOpExcluir.has(l.categoria)){recOpPorMes[m]=(recOpPorMes[m]||0)+l.valor;recOpTotal+=l.valor}if(l.tipo==='saida'){despOpTotal+=l.valor}});
+  _dcL.forEach(l=>{const m=toYM(l.data_vencimento||l.data);if(!m)return;if(isRecOp(l)){recOpPorMes[m]=(recOpPorMes[m]||0)+l.valor;recOpTotal+=l.valor}else if(isDespOp(l)){despOpTotal+=l.valor}});
   const resultado=recOpTotal-despOpTotal;
   const margem=recOpTotal>0?(resultado/recOpTotal*100).toFixed(1):'0';
 
