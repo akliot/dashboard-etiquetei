@@ -16,9 +16,10 @@ Variáveis de ambiente:
   ALLOWED_ORIGINS                — origins permitidos para CORS (Cloud Function)
 """
 
+import calendar
 import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 
 BRT = timezone(timedelta(hours=-3))
 from collections import defaultdict
@@ -377,6 +378,8 @@ def build_json() -> dict:
                 por_status[status] += 1
                 if str(r.get("status_codigo", "")) == "10":  # Ativo
                     mrr += val_mensal
+                vi = r.get("vigencia_inicio")
+                vf = r.get("vigencia_fim")
                 contratos_list.append({
                     "id": r["contrato_id"],
                     "numero": r.get("numero_contrato", ""),
@@ -384,21 +387,104 @@ def build_json() -> dict:
                     "status_codigo": str(r.get("status_codigo", "")),
                     "valor_mensal": val_mensal,
                     "cliente_nome": r.get("cliente_nome", ""),
+                    "cliente_id": r.get("cliente_id"),
                     "vendedor_nome": r.get("vendedor_nome", ""),
                     "comissao_pct": float(r.get("comissao_pct", 0) or 0),
-                    "vigencia_inicio": date_to_ddmmyyyy(r.get("vigencia_inicio")),
-                    "vigencia_fim": date_to_ddmmyyyy(r.get("vigencia_fim")),
+                    "vigencia_inicio": date_to_ddmmyyyy(vi),
+                    "vigencia_fim": date_to_ddmmyyyy(vf),
+                    "vigencia_inicio_iso": date_to_ymd(vi),
+                    "vigencia_fim_iso": date_to_ymd(vf),
                     "categoria": r.get("categoria_codigo", ""),
                     "projeto_nome": r.get("projeto_nome", ""),
                 })
+
+            # ---- Projeção MRR baseada em contratos já assinados ----
+            today = date.today()
+            limit_date = today + timedelta(days=365)
+            ativos_list = [r for r in ctr_rows if str(r.get("status_codigo", "")) == "10"]
+
+            # Pipeline: ativos com vigencia_inicio > hoje (não começaram a faturar)
+            pipeline: list[dict] = []
+            for r in ativos_list:
+                vi = r.get("vigencia_inicio")
+                if vi and vi > today:
+                    pipeline.append({
+                        "numero": r.get("numero_contrato", ""),
+                        "cliente_nome": r.get("cliente_nome", ""),
+                        "valor_mensal": float(r.get("valor_mensal", 0) or 0),
+                        "vigencia_inicio": date_to_ddmmyyyy(vi),
+                        "vigencia_inicio_iso": date_to_ymd(vi),
+                        "dias_ate_comecar": (vi - today).days,
+                    })
+            pipeline.sort(key=lambda x: x["vigencia_inicio_iso"])
+
+            # Vigências terminando nos próximos 12 meses
+            terminando: list[dict] = []
+            for r in ativos_list:
+                vf = r.get("vigencia_fim")
+                if vf and today <= vf <= limit_date:
+                    terminando.append({
+                        "numero": r.get("numero_contrato", ""),
+                        "cliente_nome": r.get("cliente_nome", ""),
+                        "valor_mensal": float(r.get("valor_mensal", 0) or 0),
+                        "vigencia_fim": date_to_ddmmyyyy(vf),
+                        "vigencia_fim_iso": date_to_ymd(vf),
+                        "dias_restantes": (vf - today).days,
+                    })
+            terminando.sort(key=lambda x: x["vigencia_fim_iso"])
+
+            # Projeção mês a mês (12 meses a partir do mês corrente)
+            proj_12m: list[dict] = []
+            for i in range(12):
+                year = today.year + (today.month - 1 + i) // 12
+                month = ((today.month - 1 + i) % 12) + 1
+                first = date(year, month, 1)
+                last = date(year, month, calendar.monthrange(year, month)[1])
+                ativos_mes = 0
+                mrr_mes = 0.0
+                entram_qtd = 0
+                mrr_entram = 0.0
+                saem_qtd = 0
+                mrr_saem = 0.0
+                for r in ativos_list:
+                    vi2 = r.get("vigencia_inicio")
+                    vf2 = r.get("vigencia_fim")
+                    v = float(r.get("valor_mensal", 0) or 0)
+                    if vi2 and vi2 <= last and (vf2 is None or vf2 >= first):
+                        ativos_mes += 1
+                        mrr_mes += v
+                    if vi2 and first <= vi2 <= last:
+                        entram_qtd += 1
+                        mrr_entram += v
+                    if vf2 and first <= vf2 <= last:
+                        saem_qtd += 1
+                        mrr_saem += v
+                proj_12m.append({
+                    "mes": first.strftime("%Y-%m"),
+                    "ativos": ativos_mes,
+                    "mrr": round(mrr_mes, 2),
+                    "entram_qtd": entram_qtd,
+                    "mrr_entram": round(mrr_entram, 2),
+                    "saem_qtd": saem_qtd,
+                    "mrr_saem": round(mrr_saem, 2),
+                })
+
             ativos = por_status.get("Ativo", 0)
+            mrr_3m = proj_12m[2]["mrr"] if len(proj_12m) > 2 else mrr
             result["contratos"] = {
                 "mrr": mrr,
-                "previsao_12m": mrr * 12,
+                "mrr_3m": mrr_3m,
+                "mrr_pipeline": round(sum(p["valor_mensal"] for p in pipeline), 2),
+                "mrr_terminando_12m": round(sum(t["valor_mensal"] for t in terminando), 2),
+                "previsao_12m": round(sum(p["mrr"] for p in proj_12m), 2),
                 "total_contratos": len(ctr_rows),
                 "contratos_ativos": ativos,
+                "contratos_futuros": len(pipeline),
                 "por_status": dict(por_status),
                 "lista": contratos_list,
+                "mrr_projetado_12m": proj_12m,
+                "pipeline_onboarding": pipeline,
+                "vigencias_terminando_12m": terminando,
             }
     except Exception:
         pass  # Tabela pode não existir ainda

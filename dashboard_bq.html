@@ -345,8 +345,27 @@ tr:hover td{background:rgba(74,144,255,.04)}
     <div class="page" id="page-contratos">
       <div class="kpi-row" id="kpi-contratos"></div>
       <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>MRR Projetado 12 Meses <span class="regime-badge competencia">Contratos ativos assinados</span></h3>
+          <div class="chart-container" style="height:300px"><canvas id="chartMrrProj"></canvas></div>
+          <p class="chart-note">Barras: contratos entrando (verde) / saindo (vermelho) no mês. Linha: MRR total projetado. Baseado apenas em contratos já no Omie — não projeta novas vendas.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card">
+          <h3>Pipeline de Onboarding</h3>
+          <div id="onboardingLista" class="proj-table" style="max-height:360px;overflow-y:auto"></div>
+          <p class="chart-note">Contratos ativos aguardando início da vigência — ainda sem faturamento.</p>
+        </div>
+        <div class="chart-card">
+          <h3>Vigências Terminando (12m)</h3>
+          <div id="terminandoLista" class="proj-table" style="max-height:360px;overflow-y:auto"></div>
+          <p class="chart-note">Risco de churn contratual. MRR em risco caso não renove.</p>
+        </div>
+      </div>
+      <div class="chart-row">
         <div class="chart-card"><h3>Contratos por Status</h3><div class="chart-container" style="height:260px"><canvas id="chartContratosStatus"></canvas></div></div>
-        <div class="chart-card"><h3>Faturamento Mensal (Contratos) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container" style="height:260px"><canvas id="chartContratosFat"></canvas></div><p class="chart-note">Receita de contratos ativos por mês (data de início da vigência)</p></div>
+        <div class="chart-card"><h3>Faturamento Mensal (Realizado) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container" style="height:260px"><canvas id="chartContratosFat"></canvas></div><p class="chart-note">Receita de contratos paga por mês (data de pagamento).</p></div>
       </div>
 
       <h3 style="margin:24px 0 14px;color:var(--muted);font-size:16px;font-weight:600">Comissões por Vendedor</h3>
@@ -1481,20 +1500,75 @@ let _comissaoVendedor='';
 let _comissaoData=[];
 let _vendedorToFornecedor={};
 
+function renderMrrProjChart(proj){
+  if(charts.mrrProj){charts.mrrProj.destroy();delete charts.mrrProj}
+  if(!proj||!proj.length)return;
+  const labels=proj.map(p=>mesNome(p.mes));
+  const mrrLine=proj.map(p=>p.mrr);
+  const entram=proj.map(p=>p.mrr_entram);
+  const saem=proj.map(p=>-p.mrr_saem);
+  charts.mrrProj=new Chart(document.getElementById('chartMrrProj'),{data:{
+    labels,
+    datasets:[
+      {type:'line',label:'MRR Projetado',data:mrrLine,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.25,pointRadius:4,pointBackgroundColor:'#4A90FF',borderWidth:2,yAxisID:'y',order:0,
+        datalabels:{display:true,color:'#4A90FF',font:{size:9,weight:600},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}},
+      {type:'bar',label:'Entrando',data:entram,backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,yAxisID:'y2',order:1,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#3DDC97',font:{size:8,weight:600},anchor:'end',align:'top',formatter:v=>'+'+fmtK(v)}},
+      {type:'bar',label:'Saindo',data:saem,backgroundColor:'#FF6B6Baa',borderColor:'#FF6B6B',borderWidth:1,yAxisID:'y2',order:1,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]<0,color:'#FF6B6B',font:{size:8,weight:600},anchor:'start',align:'bottom',formatter:v=>fmtK(v)}}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:24}},
+    scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+      y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
+      y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta mês (R$)',color:'#94a3b8'}}},
+    plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
+}
+
+function renderOnboardingTable(onboarding,mrrPipeline,esc){
+  const el=document.getElementById('onboardingLista');
+  if(!onboarding.length){el.innerHTML='<p style="color:var(--muted);padding:16px">Nenhum contrato em onboarding.</p>';return}
+  const rows=onboarding.map(c=>{
+    const corDias=c.dias_ate_comecar>30?'var(--muted)':c.dias_ate_comecar>0?'#4A90FF':'#FFB547';
+    return '<tr><td><strong>'+esc(c.numero)+'</strong></td><td>'+esc(c.cliente_nome)+'</td><td style="text-align:right" class="valor-entrada">'+fmt(c.valor_mensal)+'</td><td>'+esc(c.vigencia_inicio)+'</td><td style="text-align:right;color:'+corDias+'">'+c.dias_ate_comecar+'d</td></tr>';
+  }).join('');
+  el.innerHTML='<table><thead><tr><th>Contrato</th><th>Cliente</th><th style="text-align:right">MRR</th><th>Início</th><th style="text-align:right">Dias</th></tr></thead><tbody>'+rows+'<tr style="font-weight:700;border-top:2px solid var(--accent)"><td colspan="2">TOTAL</td><td style="text-align:right" class="valor-entrada">'+fmt(mrrPipeline)+'</td><td colspan="2">'+onboarding.length+' contratos</td></tr></tbody></table>';
+}
+
+function renderTerminandoTable(terminando,mrrTerm,esc){
+  const el=document.getElementById('terminandoLista');
+  if(!terminando.length){el.innerHTML='<p style="color:var(--muted);padding:16px">Nenhuma vigência terminando nos próximos 12 meses.</p>';return}
+  const rows=terminando.map(c=>{
+    const corDias=c.dias_restantes<30?'#FF6B6B':c.dias_restantes<90?'#FFB547':'var(--muted)';
+    return '<tr><td><strong>'+esc(c.numero)+'</strong></td><td>'+esc(c.cliente_nome)+'</td><td style="text-align:right" class="valor-saida">'+fmt(c.valor_mensal)+'</td><td>'+esc(c.vigencia_fim)+'</td><td style="text-align:right;color:'+corDias+'">'+c.dias_restantes+'d</td></tr>';
+  }).join('');
+  el.innerHTML='<table><thead><tr><th>Contrato</th><th>Cliente</th><th style="text-align:right">MRR</th><th>Fim</th><th style="text-align:right">Dias</th></tr></thead><tbody>'+rows+'<tr style="font-weight:700;border-top:2px solid var(--accent)"><td colspan="2">TOTAL</td><td style="text-align:right" class="valor-saida">'+fmt(mrrTerm)+'</td><td colspan="2">'+terminando.length+' contratos</td></tr></tbody></table>';
+}
+
 function renderContratos(){
   const ctr=dadosOriginal.contratos;
   if(!ctr){
     document.getElementById('kpi-contratos').innerHTML='<div class="empty-state"><p>Sem dados de contratos</p></div>';
   } else {
     const mrr=ctr.mrr||0;
+    const mrr3m=ctr.mrr_3m||mrr;
+    const mrrPipeline=ctr.mrr_pipeline||0;
+    const mrrTerm=ctr.mrr_terminando_12m||0;
     const ativos=ctr.contratos_ativos||0;
-    const total=ctr.total_contratos||0;
-    const prev12=ctr.previsao_12m||0;
-    document.getElementById('kpi-contratos').innerHTML=`
-      <div class="kpi-card"><div class="kpi-label">MRR (Receita Mensal Recorrente)</div><div class="kpi-value green">${fmt(mrr)}</div><div class="kpi-sub">${ativos} contratos ativos</div></div>
-      <div class="kpi-card"><div class="kpi-label">Previsão 12 Meses</div><div class="kpi-value blue">${fmt(prev12)}</div><div class="kpi-sub">baseado em contratos ativos</div></div>
-      <div class="kpi-card"><div class="kpi-label">Total de Contratos</div><div class="kpi-value purple">${fmtNum(total)}</div><div class="kpi-sub">${ativos} ativos, ${total-ativos} inativos</div></div>
-      <div class="kpi-card"><div class="kpi-label">Ticket Médio Mensal</div><div class="kpi-value cyan">${ativos>0?fmt(mrr/ativos):'—'}</div><div class="kpi-sub">por contrato ativo</div></div>`;
+    const futuros=ctr.contratos_futuros||0;
+    const deltaMrr3m=mrr>0?((mrr3m-mrr)/mrr*100):0;
+    const onboarding=ctr.pipeline_onboarding||[];
+    const terminando=ctr.vigencias_terminando_12m||[];
+    const proj=ctr.mrr_projetado_12m||[];
+    const _esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    const kpiHtml=
+      '<div class="kpi-card"><div class="kpi-label">MRR Atual</div><div class="kpi-value green">'+fmt(mrr)+'</div><div class="kpi-sub">'+ativos+' contratos faturando · ticket médio '+(ativos>0?fmt(mrr/ativos):'—')+'</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Pipeline Onboarding</div><div class="kpi-value" style="color:#4A90FF">'+fmt(mrrPipeline)+'</div><div class="kpi-sub">'+futuros+' contratos assinados aguardando início</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">MRR em 3 meses</div><div class="kpi-value cyan">'+fmt(mrr3m)+'</div><div class="kpi-sub">'+(deltaMrr3m>=0?'+':'')+deltaMrr3m.toFixed(1)+'% vs hoje · só crescimento contratado</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">MRR em Risco (12m)</div><div class="kpi-value" style="color:'+(mrrTerm>0?'#FFB547':'#3DDC97')+'">'+fmt(mrrTerm)+'</div><div class="kpi-sub">'+terminando.length+' contratos terminam em até 12m</div></div>';
+    document.getElementById('kpi-contratos').innerHTML=kpiHtml;
+    renderMrrProjChart(proj);
+    renderOnboardingTable(onboarding,mrrPipeline,_esc);
+    renderTerminandoTable(terminando,mrrTerm,_esc);
 
     // Donut: por status
     const ps=ctr.por_status||{};
