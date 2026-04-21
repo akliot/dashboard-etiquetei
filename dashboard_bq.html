@@ -213,7 +213,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
     <div class="page active" id="page-visao-geral">
       <div class="vg-grid" id="vg-kpis"></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
-        <div class="vg-spark"><h4>Receita vs Despesa (6m)</h4><div style="height:120px"><canvas id="sparkRecDesp"></canvas></div><p class="chart-note">Regime de caixa (data de pagamento)</p></div>
+        <div class="vg-spark"><h4>Receita vs Despesa (6m)</h4><div style="height:120px"><canvas id="sparkRecDesp"></canvas></div><p class="chart-note">Caixa — operacional (exclui empréstimos, FD, financeiras, CAPEX, devoluções)</p></div>
         <div class="vg-spark"><h4>Variação de Caixa % (6m)</h4><div style="height:120px"><canvas id="sparkVarCaixa"></canvas></div><p class="chart-note">Caixa. (Entradas − Saídas) ÷ Entradas × 100</p></div>
         <div class="vg-spark"><h4>Saldo Bancário (6m)</h4><div style="height:120px"><canvas id="sparkCaixa"></canvas></div><p class="chart-note">Saldo real conciliado por mês</p></div>
       </div>
@@ -759,14 +759,17 @@ function renderVisaoGeral(d,dc){
   const recMesAnt=_pmRec[mesAnt]?.entrada||0;
   const despMes=d.porMes[mesAtual]?.saida||0;
 
-  // Receita operacional por mês (competência, exclui empréstimos/FD/devoluções/rendimentos)
+  // Receita e despesa operacional por mês (competência)
+  //  Excluídas do lado entrada: 1.01.99 (a identificar), 1.02.02 (rendimentos), 1.03.* (devoluções), 1.04.01-03 (recebimento indevido, FD, empréstimos)
+  //  Excluídas do lado saída: 2.05 (financeiras), 2.07 (CAPEX), 2.08 (IRPJ/CSLL), 2.09 (devoluções), 2.10 (empréstimos), 2.11 (outros não-op)
   const _recOpExcluir=new Set(['1.01.99','1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
+  const _despOpExcluir=new Set(['2.05','2.07','2.08','2.09','2.10','2.11']);
   const _dcL=dc?dc.L:dadosFiltrados.lancamentos;
-  const recOpPorMes={};let recOpTotal=0,despOpTotal=0;
+  const recOpPorMes={},despOpPorMes={};let recOpTotal=0,despOpTotal=0;
   _dcL.forEach(l=>{
     const m=toYM(l.data_vencimento||l.data);if(!m)return;
     if(l.tipo==='entrada'&&!_recOpExcluir.has(l.categoria)){recOpPorMes[m]=(recOpPorMes[m]||0)+l.valor;recOpTotal+=l.valor}
-    if(l.tipo==='saida'){despOpTotal+=l.valor}
+    if(l.tipo==='saida'&&!_despOpExcluir.has(getGrupo(l.categoria))){despOpPorMes[m]=(despOpPorMes[m]||0)+l.valor;despOpTotal+=l.valor}
   });
   const resultado=recOpTotal-despOpTotal;
   const margem=recOpTotal>0?(resultado/recOpTotal*100).toFixed(1):'0';
@@ -795,7 +798,7 @@ function renderVisaoGeral(d,dc){
   // KPIs
   document.getElementById('vg-kpis').innerHTML=`
     <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita Mês <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">vs mês anterior ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
-    <div class="vg-kpi ${resultado>=0?'bar-green':'bar-red'}"><div class="vg-lbl">Resultado</div><div class="vg-val" style="color:${resultado>=0?'#3DDC97':'#FF6B6B'}">${fmt(resultado)}</div><div class="vg-sub">Margem ${margem}%</div><p class="chart-note">Competência (exclui atrasados)</p></div>
+    <div class="vg-kpi ${resultado>=0?'bar-green':'bar-red'}"><div class="vg-lbl">Resultado Operacional</div><div class="vg-val" style="color:${resultado>=0?'#3DDC97':'#FF6B6B'}">${fmt(resultado)}</div><div class="vg-sub">Margem ${margem}%</div><p class="chart-note">Competência. Rec. op. − Desp. op. (exclui financeiras, CAPEX, IRPJ/CSLL, empréstimos)</p></div>
     <div class="vg-kpi bar-cyan"><div class="vg-lbl">Caixa Total</div><div class="vg-val" style="color:#2DD4BF">${fmt(saldoTotal)}</div><div class="vg-sub">${varSaldo!=='--'?(Number(varSaldo)>=0?'↑':'↓')+Math.abs(varSaldo)+'% vs mês ant':'--'}</div></div>
     <div class="vg-kpi ${corRunway}"><div class="vg-lbl">Meses de Caixa</div><div class="vg-val" style="color:${corRunwayTxt}">${runwayTxt}</div><div class="vg-sub">meses de operação</div><p class="chart-note">Saldo ÷ média despesas 3m</p></div>
     <div class="vg-kpi ${corInad}"><div class="vg-lbl">Inadimplência</div><div class="vg-val" style="color:${corInadTxt}">${fmt(vRec)}</div><div class="vg-sub">${pctInad.toFixed(1)}% da receita</div><p class="chart-note">Atrasados ÷ receita do período</p></div>`;
@@ -806,9 +809,15 @@ function renderVisaoGeral(d,dc){
   const sparkOpts={responsive:true,maintainAspectRatio:false,scales:{x:{display:false},y:{display:false}},plugins:{legend:{display:false},datalabels:sparkDL,tooltip:{enabled:false}},elements:{point:{radius:0}}};
   const m6=meses.filter(m=>m<=mesAtual).slice(-6);
 
-  // Spark 1: Receita vs Despesa
-  const spk1Ent=m6.map(m=>d.porMes[m]?.entrada||0);
-  const spk1Sai=m6.map(m=>-(d.porMes[m]?.saida||0));
+  // Spark 1: Receita vs Despesa (caixa, operacional — mesmo escopo do Faturamento competência)
+  const recCxPorMes={},despCxPorMes={};
+  dadosFiltrados.lancamentos.forEach(l=>{
+    const m=toYM(l.data);if(!m)return;
+    if(l.tipo==='entrada'&&!_recOpExcluir.has(l.categoria)){recCxPorMes[m]=(recCxPorMes[m]||0)+l.valor}
+    if(l.tipo==='saida'&&!_despOpExcluir.has(getGrupo(l.categoria))){despCxPorMes[m]=(despCxPorMes[m]||0)+l.valor}
+  });
+  const spk1Ent=m6.map(m=>recCxPorMes[m]||0);
+  const spk1Sai=m6.map(m=>-(despCxPorMes[m]||0));
   const spk1Max=Math.max(...spk1Ent)*1.35;
   const spk1Min=Math.min(...spk1Sai)*1.35;
   const spk1YoY=m6.map(m=>{const pm=getAllPorMes()[getYoYMonth(m)];return pm?pm.entrada:null});
