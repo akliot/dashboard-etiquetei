@@ -529,10 +529,9 @@ function initDashboard(){
   _projetos=(dadosOriginal.projetos||[]).slice().sort((a,b)=>a.nome.localeCompare(b.nome));
   document.getElementById('projetoInput').value='';
   document.getElementById('filterProjeto').value='';
-  const DEFAULT_DE='2025-07-01', DEFAULT_ATE='2026-07-01';
-  document.getElementById('filterDe').value=DEFAULT_DE;
-  document.getElementById('filterAte').value=DEFAULT_ATE;
-  aplicarFiltros();
+  // Default: YTD (últimos 12 meses calendários)
+  const ytdBtn=document.querySelector('#filtersBar .periodo-btns button[onclick*="ytd"]');
+  setPeriodo('ytd',ytdBtn);
 }
 
 function aplicarFiltros(){
@@ -546,9 +545,8 @@ function aplicarFiltros(){
 }
 
 function resetDatas(){
-  document.getElementById('filterDe').value='2025-07-01';
-  document.getElementById('filterAte').value='2026-07-01';
-  aplicarFiltros();
+  const ytdBtn=document.querySelector('#filtersBar .periodo-btns button[onclick*="ytd"]');
+  setPeriodo('ytd',ytdBtn);
 }
 
 function limparFiltros(){
