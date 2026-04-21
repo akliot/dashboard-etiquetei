@@ -664,7 +664,9 @@ function renderFluxoMod(){
 
 let _saldoContaMode='d1';
 let _ebitdaMode='real';
+let _recMesMode='caixa';
 function setEbitdaMode(mode,el){_ebitdaMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
+function setRecMesMode(mode,el){_recMesMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
 
 function setSaldoContaMode(mode,el){
   _saldoContaMode=mode;
@@ -752,8 +754,9 @@ function renderVisaoGeral(d,dc){
   let mesAtual=meses.includes(mesHoje)?mesHoje:meses.filter(m=>(d.porMes[m]?.entrada||0)>0).pop()||meses[meses.length-1]||'';
   const mesIdx=meses.indexOf(mesAtual);
   const mesAnt=mesIdx>0?meses[mesIdx-1]:'';
-  const recMes=d.porMes[mesAtual]?.entrada||0;
-  const recMesAnt=d.porMes[mesAnt]?.entrada||0;
+  const _pmRec=_recMesMode==='competencia'?(dc?dc.porMes:d.porMes):d.porMes;
+  const recMes=_pmRec[mesAtual]?.entrada||0;
+  const recMesAnt=_pmRec[mesAnt]?.entrada||0;
   const despMes=d.porMes[mesAtual]?.saida||0;
 
   // Receita operacional por mês (competência, exclui empréstimos/FD/devoluções/rendimentos)
@@ -791,7 +794,7 @@ function renderVisaoGeral(d,dc){
 
   // KPIs
   document.getElementById('vg-kpis').innerHTML=`
-    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita Mês</div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">vs mês anterior ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">Caixa (data de pagamento)</p></div>
+    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita Mês <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">vs mês anterior ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
     <div class="vg-kpi ${resultado>=0?'bar-green':'bar-red'}"><div class="vg-lbl">Resultado</div><div class="vg-val" style="color:${resultado>=0?'#3DDC97':'#FF6B6B'}">${fmt(resultado)}</div><div class="vg-sub">Margem ${margem}%</div><p class="chart-note">Competência (exclui atrasados)</p></div>
     <div class="vg-kpi bar-cyan"><div class="vg-lbl">Caixa Total</div><div class="vg-val" style="color:#2DD4BF">${fmt(saldoTotal)}</div><div class="vg-sub">${varSaldo!=='--'?(Number(varSaldo)>=0?'↑':'↓')+Math.abs(varSaldo)+'% vs mês ant':'--'}</div></div>
     <div class="vg-kpi ${corRunway}"><div class="vg-lbl">Meses de Caixa</div><div class="vg-val" style="color:${corRunwayTxt}">${runwayTxt}</div><div class="vg-sub">meses de operação</div><p class="chart-note">Saldo ÷ média despesas 3m</p></div>
@@ -816,15 +819,27 @@ function renderVisaoGeral(d,dc){
               {type:'line',data:spk1YoY,borderColor:'rgba(255,255,255,.2)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}]
   },options:{...sparkOpts,scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk1Max,suggestedMin:spk1Min}}}});
 
-  // Spark 2: Evolução Caixa (saldo bancário real do historico_conciliacao)
+  // Spark 2: Evolução Caixa (saldo bancário real + projeção para meses sem histórico)
   const histSp=(dadosOriginal.historico_conciliacao||[]).filter(h=>h.tipo==='mensal');
   const spSaldo={};histSp.forEach(h=>{if(h.banco_nome&&h.banco_nome.toUpperCase().includes('RENATA PATELLI'))return;const m=h.data.substring(0,7);spSaldo[m]=(spSaldo[m]||0)+h.saldo_atual});
-  const caixaAcum=m6.map(m=>spSaldo[m]||0);
-  const spk2Max=Math.max(...caixaAcum)*1.15;
+  // Se mês não tem histórico, projetar: último saldo real + Σ(entradas-saídas) acumulado desde então
+  const caixaAcum=[];const caixaProjFlag=[];let lastSaldo=null,delta=0;
+  m6.forEach(m=>{
+    if(spSaldo[m]!=null){lastSaldo=spSaldo[m];delta=0;caixaAcum.push(spSaldo[m]);caixaProjFlag.push(false)}
+    else if(lastSaldo!=null){const pm=d.porMes[m]||{};delta+=(pm.entrada||0)-(pm.saida||0);caixaAcum.push(lastSaldo+delta);caixaProjFlag.push(true)}
+    else{caixaAcum.push(null);caixaProjFlag.push(false)}
+  });
+  const caixaVals=caixaAcum.filter(v=>v!=null);
+  const spk2Max=caixaVals.length?Math.max(...caixaVals,0)*1.15:1;
+  const spk2Min=caixaVals.length?Math.min(...caixaVals,0)*1.15:0;
+  const temProj=caixaProjFlag.some(Boolean);
   charts.spkCx=new Chart(document.getElementById('sparkCaixa'),{type:'line',data:{
     labels:m6.map(mesNome),
-    datasets:[{data:caixaAcum,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.4}]
-  },options:{...sparkOpts,scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk2Max}}}});
+    datasets:[{data:caixaAcum,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.4,
+      segment:{borderDash:ctx=>caixaProjFlag[ctx.p1DataIndex]?[4,3]:undefined}}]
+  },options:{...sparkOpts,scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk2Max,suggestedMin:spk2Min}}}});
+  const cxNote=document.querySelector('#page-visao-geral .vg-spark canvas#sparkCaixa')?.closest('.vg-spark')?.querySelector('.chart-note');
+  if(cxNote)cxNote.textContent=temProj?'Saldo real por mês; linha tracejada = projeção (último saldo + entradas − saídas).':'Saldo real conciliado por mês.';
 
   // Spark 3: EBITDA (competência)
   const dcPM=dc?dc.porMes:{};
@@ -2075,8 +2090,9 @@ function gerarRelatorioPDF(){
   let mesAtual=meses.includes(mesHoje)?mesHoje:meses.filter(m=>(d.porMes[m]?.entrada||0)>0).pop()||meses[meses.length-1]||'';
   const mesIdx=meses.indexOf(mesAtual);
   const mesAnt=mesIdx>0?meses[mesIdx-1]:'';
-  const recMes=d.porMes[mesAtual]?.entrada||0;
-  const recMesAnt=d.porMes[mesAnt]?.entrada||0;
+  const _pmRecPdf=_recMesMode==='competencia'?(dc?dc.porMes:d.porMes):d.porMes;
+  const recMes=_pmRecPdf[mesAtual]?.entrada||0;
+  const recMesAnt=_pmRecPdf[mesAnt]?.entrada||0;
   const despMes=d.porMes[mesAtual]?.saida||0;
   const varRec=recMesAnt>0?((recMes-recMesAnt)/recMesAnt*100):0;
 
