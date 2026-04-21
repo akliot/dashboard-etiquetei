@@ -117,6 +117,16 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .concil-stat .num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700}.concil-stat .lbl{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
 .fin-detail-table{max-height:420px;overflow-y:auto}
 .fin-detail-table thead{position:sticky;top:0;background:#0F1420;z-index:1}
+.dre-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
+.dre-wrap th{padding:10px 10px;font-weight:600;color:rgba(255,255,255,.65);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.dre-wrap td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;font-variant-numeric:tabular-nums}
+.dre-wrap tr.dre-sub td{color:rgba(255,255,255,.7)}
+.dre-wrap tr.dre-total td{background:rgba(74,144,255,.06);font-weight:700;border-top:1px solid rgba(74,144,255,.2);border-bottom:1px solid rgba(74,144,255,.2)}
+.dre-wrap tr.dre-total.positivo td{background:rgba(61,220,151,.07);border-color:rgba(61,220,151,.2);color:#e2e8f0}
+.dre-wrap tr.dre-total.negativo td{background:rgba(255,107,107,.07);border-color:rgba(255,107,107,.2)}
+.dre-wrap tr.dre-final td{background:rgba(167,139,250,.08);font-weight:800;border-top:2px solid rgba(167,139,250,.4);border-bottom:2px solid rgba(167,139,250,.4);font-size:13.5px}
+.dre-wrap .deduct{color:#FF8A8A}
+.dre-wrap .total-col{border-left:2px solid rgba(255,255,255,.12);font-weight:600}
 /* Visão Geral — Premium Design */
 #page-visao-geral{font-family:'DM Sans',system-ui,sans-serif}
 #page-visao-geral .vg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
@@ -195,7 +205,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
 <div class="tabs" id="tabsContainer" style="display:none">
   <button class="tab active" data-tab="visao-geral">Visão Geral</button>
   <button class="tab" data-tab="fluxo-caixa">Fluxo de Caixa</button>
-  <button class="tab" data-tab="financeiro">Financeiro</button>
+  <button class="tab" data-tab="financeiro">Resultado</button>
   <button class="tab" data-tab="vendas">Receitas</button>
   <button class="tab" data-tab="projetos">Projetos</button>
   <button class="tab" data-tab="contratos">Contratos</button>
@@ -279,27 +289,24 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
     </div>
 
-    <!-- FINANCEIRO (detalhado) -->
+    <!-- RESULTADO (DRE estruturada) -->
     <div class="page" id="page-financeiro">
 
       <div class="kpi-row" id="kpi-financeiro"></div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Receita vs Custo Direto vs SG&amp;A (Mensal) <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinStack"></canvas></div><p class="chart-note">Regime de competência (data de vencimento, exclui atrasados)</p></div>
-        <div class="chart-card"><h3>Resultado Mensal <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinResultado"></canvas></div><p class="chart-note">Competência. Verde = lucro, vermelho = prejuízo</p></div>
-      </div>
-      <div class="chart-row">
-        <div class="chart-card"><h3>Despesas s/ Custo Direto (% Receita) <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinFinanceiras"></canvas></div><p class="chart-note">SG&A + Outros como % da receita mensal</p></div>
-        <div class="chart-card"><h3>Composição de Saídas <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinComposicao"></canvas></div><p class="chart-note">Distribuição por grupo de despesa no período</p></div>
-      </div>
-      <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
-          <h3>Detalhamento Mês a Mês <span class="regime-badge competencia">Competência</span></h3>
-          <div class="fin-detail-table" id="finDetailTable"></div>
+          <h3>DRE — Demonstrativo de Resultados <span class="regime-badge competencia">Competência</span></h3>
+          <div class="dre-wrap" id="dreTable" style="overflow-x:auto"></div>
+          <p class="chart-note">Receita operacional (1.01.*) + DAS (2.06.99). Não inclui CAPEX (2.07), devoluções (2.09), empréstimos (2.10), FD (1.04.02) nem rendimentos (1.02.02).</p>
         </div>
       </div>
       <div class="chart-row">
-        <div class="chart-card"><h3>Contas a Receber vs Pagar <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartReceberPagar"></canvas></div><p class="chart-note">Posição de caixa futuro por mês</p></div>
-        <div class="chart-card"><h3>A Vencer vs Atrasado <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartVencidos"></canvas></div><p class="chart-note">Títulos pendentes por status e tipo</p></div>
+        <div class="chart-card"><h3>Evolução de Margens <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartMargens"></canvas></div><p class="chart-note">Margem Bruta, EBITDA e Lucro Líquido como % da Receita Líquida</p></div>
+        <div class="chart-card"><h3>Resultado Mensal <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinResultado"></canvas></div><p class="chart-note">Lucro Líquido em R$ por mês. Verde = lucro, vermelho = prejuízo.</p></div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card"><h3>Receita Bruta vs Custos vs SG&amp;A <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinStack"></canvas></div><p class="chart-note">Composição mensal: receita, custo direto e SG&amp;A total.</p></div>
+        <div class="chart-card"><h3>SG&amp;A — Composição <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartSgaBreak"></canvas></div><p class="chart-note">Distribuição entre Comercial, Pessoal e Admin no período.</p></div>
       </div>
     </div>
 
@@ -1394,105 +1401,146 @@ function renderFluxoTabela(d){
 
 // ============ FINANCEIRO (detalhado) ============
 function renderFinanceiro(d){
-  const recOp=d.tERecOp||0, despOp=d.tSDespOp||0;
-  const lucro=recOp-despOp;
-  // KPIs: receita op, total despesa op, resultado, margem, e top 2 grupos de despesa
-  const top2=d.finGruposArr.slice(0,2);
-  const deltaRec=d.tE-recOp, deltaDesp=d.tS-despOp;
-  const subRec=deltaRec>0?' · Bruta: '+fmt(d.tE):'';
-  const subDesp=deltaDesp>0?' · Bruta: '+fmt(d.tS):'';
-  document.getElementById('kpi-financeiro').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Receita Operacional</div><div class="kpi-value green">${fmt(recOp)}</div><div class="kpi-sub">${d.ent.length} lançamentos${subRec}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Despesa Operacional</div><div class="kpi-value red">${fmt(despOp)}</div><div class="kpi-sub">${d.sai.length} lançamentos${subDesp}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Resultado Operacional</div><div class="kpi-value ${lucro>=0?'green':'red'}">${fmt(lucro)}</div><div class="kpi-sub">Margem: ${recOp>0?(lucro/recOp*100).toFixed(1):'0'}%</div></div>
-    ${top2.map((g,i)=>`<div class="kpi-card"><div class="kpi-label">${g[1].nome.substring(0,30)}</div><div class="kpi-value" style="color:${cores[i+2]}">${fmt(g[1].total)}</div><div class="kpi-sub">${recOp>0?(g[1].total/recOp*100).toFixed(1):'0'}% da receita op.</div></div>`).join('')}
-    <div class="kpi-card"><div class="kpi-label">A Receber (aberto)</div><div class="kpi-value blue">${fmt(d.abRec)}</div><div class="kpi-sub">Vencido: ${fmt(d.vRec)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">A Pagar (aberto)</div><div class="kpi-value yellow">${fmt(d.abPag)}</div><div class="kpi-sub">Vencido: ${fmt(d.vPag)}</div></div>`;
-
-  const meses=Object.keys(d.finMesAll).sort();
-
-  // SG&A = 4.02+4.03+4.04+4.05 (API: 2.02,2.03,2.04,2.10)
-  const sgaCodes=new Set(['2.02','2.03','2.04','2.10']);
-  const sgaMes={};meses.forEach(m=>{sgaMes[m]=0});
-  const outrosGrupos=[];
-  d.finGruposArr.forEach(g=>{
-    if(g[0]==='2.01') return; // Desp. Diretas separado como Custo Direto
-    if(sgaCodes.has(g[0])){meses.forEach(m=>{sgaMes[m]+=(g[1].porMes[m]||0)})}
-    else outrosGrupos.push(g);
+  // d = computeCompetencia(). Construir DRE estruturada a partir de d.L.
+  const L=d.L||dadosFiltrados.lancamentos_competencia||[];
+  const meses=gerarMesesPeriodo();
+  const zero=()=>{const o={};meses.forEach(m=>o[m]=0);return o};
+  const dre={
+    receitaBruta:zero(),das:zero(),receitaLiquida:zero(),
+    cmv:zero(),margemBruta:zero(),
+    comercial:zero(),pessoal:zero(),admin:zero(),sgaTotal:zero(),
+    ebitda:zero(),financeiras:zero(),lucroLiquido:zero()
+  };
+  L.forEach(l=>{
+    const m=toYM(l.data_vencimento||l.data);
+    if(!m||!(m in dre.receitaBruta))return;
+    const cat=l.categoria||'';
+    const g=getGrupo(cat);
+    if(l.tipo==='entrada'&&cat.startsWith('1.01.')){dre.receitaBruta[m]+=l.valor}
+    else if(l.tipo==='saida'){
+      if(cat==='2.06.99')dre.das[m]+=l.valor;
+      else if(g==='2.01')dre.cmv[m]+=l.valor;
+      else if(g==='2.02')dre.comercial[m]+=l.valor;
+      else if(g==='2.03')dre.pessoal[m]+=l.valor;
+      else if(g==='2.04')dre.admin[m]+=l.valor;
+      else if(g==='2.05')dre.financeiras[m]+=l.valor;
+      // Ignora 2.07 CAPEX, 2.08 IRPJ/CSLL (Simples), 2.09 dev. saída, 2.10 emp., 2.11 outros
+    }
   });
-  const custoDireto=d.finGrupos['2.01'];
-  const datasets=[
-    {label:'Receita',data:meses.map(m=>d.finMesAll[m]?.receita||0),backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
-    {label:'Custo Direto',data:meses.map(m=>custoDireto?.porMes[m]||0),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1},
-    {label:'SG&A',data:meses.map(m=>sgaMes[m]),backgroundColor:'#eab30888',borderColor:'#eab308',borderWidth:1}
-  ];
-  outrosGrupos.slice(0,4).forEach((g,i)=>{
-    datasets.push({label:g[1].nome.substring(0,25),data:meses.map(m=>g[1].porMes[m]||0),backgroundColor:cores[i+4]+'88',borderColor:cores[i+4],borderWidth:1});
-  });
-  datasets.push({type:'line',label:'Receita Ano Ant.',data:meses.map(m=>{const fm=getAllFinMesAll()[getYoYMonth(m)];return fm?fm.receita:null}),borderDash:[5,5],borderColor:'#ffffff33',borderWidth:1.5,pointRadius:2,pointBackgroundColor:'#ffffff33',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}});
-  charts.finStack=new Chart(document.getElementById('chartFinStack'),{type:'bar',data:{labels:meses.map(mesNome),datasets},
-    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#cbd5e1',font:{size:8,weight:500},anchor:'end',align:'top',offset:2,formatter:v=>fmtM(v)}}}});
-
-  // Resultado mensal
-  const resultados=meses.map(m=>(d.finMesAll[m]?.receita||0)-(d.finMesAll[m]?.saida||0));
-  charts.finRes=new Chart(document.getElementById('chartFinResultado'),{type:'bar',data:{
-    labels:meses.map(mesNome),
-    datasets:[{label:'Resultado',data:resultados,backgroundColor:resultados.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:resultados.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1}]
-  },options:cOpts('currency')});
-
-  // Despesas (sem Custo Direto) como % da receita mensal
-  const pctGrupos=d.finGruposArr.filter(g=>g[0]!=='2.01');
-  // Consolidar SG&A no percentual também
-  const pctSGA={label:'SG&A',data:meses.map(m=>{const rec=d.finMesAll[m]?.receita||0;return rec>0?(sgaMes[m]/rec*100):0}),backgroundColor:'#eab30888',borderColor:'#eab308',borderWidth:1};
-  const pctOutros=outrosGrupos.slice(0,5).map((g,i)=>({label:g[1].nome.substring(0,25),data:meses.map(m=>{const rec=d.finMesAll[m]?.receita||0;return rec>0?((g[1].porMes[m]||0)/rec*100):0}),backgroundColor:cores[i+4]+'88',borderColor:cores[i+4],borderWidth:1}));
-  charts.finFin=new Chart(document.getElementById('chartFinFinanceiras'),{type:'bar',data:{labels:meses.map(mesNome),datasets:[pctSGA,...pctOutros]},
-    options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>v.toFixed(0)+'%'},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},datalabels:{display:ctx=>{const v=ctx.dataset.data[ctx.dataIndex];return v>3},color:'#fff',font:{size:8,weight:600},formatter:v=>v.toFixed(1)+'%'}}}});
-
-  // Composição de saídas (doughnut)
-  const compData=d.finGruposArr.filter(g=>g[1].total>0).slice(0,10);
-  charts.finComp=new Chart(document.getElementById('chartFinComposicao'),{type:'doughnut',data:{
-    labels:compData.map(g=>g[1].nome.substring(0,30)),datasets:[{data:compData.map(g=>g[1].total),backgroundColor:cores.slice(0,compData.length).map(c=>c+'88'),borderColor:cores.slice(0,compData.length),borderWidth:1}]
-  },options:dOpts});
-
-  // Tabela detalhada: mês a mês com cada grupo de despesa como coluna
-  const tabelaGrupos=d.finGruposArr.filter(g=>g[1].total>0);
-  let th='<table><thead><tr><th>Mês</th><th style="text-align:right">Receita</th>';
-  tabelaGrupos.forEach(g=>{th+=`<th style="text-align:right;font-size:10px">${g[1].nome.substring(0,20)}</th>`});
-  th+='<th style="text-align:right">Resultado</th><th style="text-align:right">Margem</th></tr></thead><tbody>';
-  const totais={receita:0,grupos:{},resultado:0};
-  tabelaGrupos.forEach(g=>{totais.grupos[g[0]]=0});
   meses.forEach(m=>{
-    const rec=d.finMesAll[m]?.receita||0;
-    let desp=0;
-    totais.receita+=rec;
-    th+=`<tr><td><strong>${mesNome(m)}</strong></td><td style="text-align:right" class="valor-entrada">${fmt(rec)}</td>`;
-    tabelaGrupos.forEach(g=>{
-      const v=g[1].porMes[m]||0;desp+=v;totais.grupos[g[0]]+=v;
-      th+=`<td style="text-align:right" class="valor-saida">${v?fmt(v):'-'}</td>`;
-    });
-    const res=rec-desp;totais.resultado+=res;
-    const mg=rec>0?(res/rec*100).toFixed(1):'0';
-    th+=`<td style="text-align:right;color:${res>=0?'var(--green)':'var(--red)'}"><strong>${fmt(res)}</strong></td><td style="text-align:right;color:${res>=0?'var(--green)':'var(--red)'}">${mg}%</td></tr>`;
+    dre.receitaLiquida[m]=dre.receitaBruta[m]-dre.das[m];
+    dre.margemBruta[m]=dre.receitaLiquida[m]-dre.cmv[m];
+    dre.sgaTotal[m]=dre.comercial[m]+dre.pessoal[m]+dre.admin[m];
+    dre.ebitda[m]=dre.margemBruta[m]-dre.sgaTotal[m];
+    dre.lucroLiquido[m]=dre.ebitda[m]-dre.financeiras[m];
   });
-  // Total row
-  const totMg=totais.receita>0?(totais.resultado/totais.receita*100).toFixed(1):'0';
-  th+=`<tr style="font-weight:700;border-top:2px solid var(--accent)"><td>TOTAL</td><td style="text-align:right" class="valor-entrada">${fmt(totais.receita)}</td>`;
-  tabelaGrupos.forEach(g=>{th+=`<td style="text-align:right" class="valor-saida">${fmt(totais.grupos[g[0]])}</td>`});
-  th+=`<td style="text-align:right;color:${totais.resultado>=0?'var(--green)':'var(--red)'}">${fmt(totais.resultado)}</td><td style="text-align:right;color:${totais.resultado>=0?'var(--green)':'var(--red)'}">${totMg}%</td></tr></tbody></table>`;
-  document.getElementById('finDetailTable').innerHTML=th;
+  const sumRow=row=>meses.reduce((s,m)=>s+row[m],0);
+  const totais={};Object.keys(dre).forEach(k=>totais[k]=sumRow(dre[k]));
 
-  // Contas a Receber vs Pagar
-  const m2=Object.keys(d.porMes).sort();
-  charts.rp=new Chart(document.getElementById('chartReceberPagar'),{type:'line',data:{labels:m2.map(mesNome),datasets:[{label:'Receber',data:m2.map(x=>d.porMes[x].entrada),borderColor:'#3b82f6',backgroundColor:'#3b82f622',fill:true,tension:.3},{label:'Pagar',data:m2.map(x=>d.porMes[x].saida),borderColor:'#ef4444',backgroundColor:'#ef444422',fill:true,tension:.3}]},options:cOpts('currency')});
+  const recLiqTotal=totais.receitaLiquida;
+  const pct=v=>recLiqTotal>0?(v/recLiqTotal*100).toFixed(1)+'%':'—';
+  const mbPct=recLiqTotal>0?totais.margemBruta/recLiqTotal*100:0;
+  const ebPct=recLiqTotal>0?totais.ebitda/recLiqTotal*100:0;
+  const llPct=recLiqTotal>0?totais.lucroLiquido/recLiqTotal*100:0;
 
-  // A Vencer vs Atrasado
-  charts.venc=new Chart(document.getElementById('chartVencidos'),{type:'bar',data:{
-    labels:['Receber','Pagar'],
-    datasets:[
-      {label:'A Vencer',data:[d.avRec,d.avPag],backgroundColor:'#3b82f688',borderColor:'#3b82f6',borderWidth:1},
-      {label:'Atrasado',data:[d.vRec,d.vPag],backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1}
-    ]
-  },options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8'}},datalabels:dlCurrency}}});
+  // ---- KPIs hero ----
+  document.getElementById('kpi-financeiro').innerHTML=
+    '<div class="kpi-card"><div class="kpi-label">EBITDA</div><div class="kpi-value '+(totais.ebitda>=0?'green':'red')+'">'+fmt(totais.ebitda)+'</div><div class="kpi-sub">Margem EBITDA: '+ebPct.toFixed(1)+'%</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Margem Bruta</div><div class="kpi-value '+(mbPct>=50?'green':mbPct>=30?'yellow':'red')+'">'+mbPct.toFixed(1)+'%</div><div class="kpi-sub">Rec. Líq. '+fmt(totais.receitaLiquida)+' − CMV '+fmt(totais.cmv)+'</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value '+(totais.lucroLiquido>=0?'green':'red')+'">'+fmt(totais.lucroLiquido)+'</div><div class="kpi-sub">Margem: '+llPct.toFixed(1)+'%</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Receita Bruta</div><div class="kpi-value blue">'+fmt(totais.receitaBruta)+'</div><div class="kpi-sub">'+meses.length+' '+(meses.length===1?'mês':'meses')+' · DAS '+fmt(totais.das)+'</div></div>';
+
+  // ---- Tabela DRE ----
+  const linhas=[
+    {label:'Receita Bruta',key:'receitaBruta'},
+    {label:'(−) DAS (Simples)',key:'das',deduct:true,sub:true},
+    {label:'= Receita Líquida',key:'receitaLiquida',total:true},
+    {label:'(−) Custo Direto',key:'cmv',deduct:true,sub:true},
+    {label:'= Margem Bruta',key:'margemBruta',total:true,positivo:totais.margemBruta>=0},
+    {label:'(−) Comercial',key:'comercial',deduct:true,sub:true},
+    {label:'(−) Pessoal',key:'pessoal',deduct:true,sub:true},
+    {label:'(−) Admin',key:'admin',deduct:true,sub:true},
+    {label:'= EBITDA',key:'ebitda',total:true,positivo:totais.ebitda>=0},
+    {label:'(−) Financeiras',key:'financeiras',deduct:true,sub:true},
+    {label:'= Lucro Líquido',key:'lucroLiquido',final:true,positivo:totais.lucroLiquido>=0}
+  ];
+  let thead='<thead><tr><th style="text-align:left">Conta</th>';
+  meses.forEach(m=>{thead+='<th style="text-align:right">'+mesNome(m)+'</th>'});
+  thead+='<th class="total-col" style="text-align:right">Total</th><th style="text-align:right">% Rec Líq</th></tr></thead>';
+  let tbody='<tbody>';
+  linhas.forEach(ln=>{
+    const row=dre[ln.key];const total=totais[ln.key];
+    const cls=ln.final?'dre-final':ln.total?('dre-total '+(ln.positivo?'positivo':'negativo')):(ln.sub?'dre-sub':'');
+    tbody+='<tr class="'+cls+'"><td>'+ln.label+'</td>';
+    meses.forEach(m=>{
+      const v=row[m];
+      const txt=ln.deduct&&v>0?'('+fmt(v)+')':v===0?'—':fmt(v);
+      const color=ln.deduct?' class="deduct"':'';
+      tbody+='<td style="text-align:right"'+color+'>'+txt+'</td>';
+    });
+    const fmtT=ln.deduct&&total>0?'('+fmt(total)+')':total===0?'—':fmt(total);
+    tbody+='<td class="total-col" style="text-align:right">'+fmtT+'</td>';
+    tbody+='<td style="text-align:right">'+pct(ln.key==='receitaLiquida'?recLiqTotal:total)+'</td>';
+    tbody+='</tr>';
+  });
+  tbody+='</tbody>';
+  document.getElementById('dreTable').innerHTML='<table>'+thead+tbody+'</table>';
+
+  // ---- Evolução de Margens % ----
+  if(charts.finMargens){charts.finMargens.destroy();delete charts.finMargens}
+  const toPct=(num,den)=>den>0?Math.round(num/den*1000)/10:0;
+  const mbArr=meses.map(m=>toPct(dre.margemBruta[m],dre.receitaLiquida[m]));
+  const ebArr=meses.map(m=>toPct(dre.ebitda[m],dre.receitaLiquida[m]));
+  const llArr=meses.map(m=>toPct(dre.lucroLiquido[m],dre.receitaLiquida[m]));
+  charts.finMargens=new Chart(document.getElementById('chartMargens'),{type:'line',
+    data:{labels:meses.map(mesNome),datasets:[
+      {label:'Margem Bruta',data:mbArr,borderColor:'#3DDC97',backgroundColor:'#3DDC9711',tension:.25,pointRadius:3,borderWidth:2,
+        datalabels:{display:true,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
+      {label:'Margem EBITDA',data:ebArr,borderColor:'#4A90FF',backgroundColor:'#4A90FF11',tension:.25,pointRadius:3,borderWidth:2,
+        datalabels:{display:true,color:'#4A90FF',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
+      {label:'Margem LL',data:llArr,borderColor:'#A78BFA',backgroundColor:'#A78BFA11',tension:.25,pointRadius:3,borderWidth:2,
+        datalabels:{display:true,color:'#A78BFA',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:18}},
+      scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
+
+  // ---- Resultado Mensal ----
+  if(charts.finRes){charts.finRes.destroy();delete charts.finRes}
+  const resultados=meses.map(m=>dre.lucroLiquido[m]);
+  charts.finRes=new Chart(document.getElementById('chartFinResultado'),{type:'bar',
+    data:{labels:meses.map(mesNome),
+      datasets:[{data:resultados,backgroundColor:resultados.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:resultados.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1,
+        datalabels:{display:true,color:'#e2e8f0',font:{size:9,weight:500},anchor:'end',align:'top',formatter:v=>fmtK(v)}}]},
+    options:cOpts('currency')});
+
+  // ---- Receita Bruta vs Custo Direto vs SG&A (stacked) ----
+  if(charts.finStack){charts.finStack.destroy();delete charts.finStack}
+  charts.finStack=new Chart(document.getElementById('chartFinStack'),{type:'bar',
+    data:{labels:meses.map(mesNome),datasets:[
+      {label:'Receita Bruta',data:meses.map(m=>dre.receitaBruta[m]),backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
+      {label:'Custo Direto',data:meses.map(m=>dre.cmv[m]),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1},
+      {label:'SG&A',data:meses.map(m=>dre.sgaTotal[m]),backgroundColor:'#eab30888',borderColor:'#eab308',borderWidth:1}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#cbd5e1',font:{size:8,weight:500},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
+
+  // ---- SG&A Composição (doughnut) ----
+  if(charts.sgaBreak){charts.sgaBreak.destroy();delete charts.sgaBreak}
+  const sgaData=[
+    {label:'Comercial (2.02)',value:totais.comercial,color:'#FF6B6B'},
+    {label:'Pessoal (2.03)',value:totais.pessoal,color:'#4A90FF'},
+    {label:'Admin (2.04)',value:totais.admin,color:'#FFB547'}
+  ].filter(s=>s.value>0);
+  if(sgaData.length){
+    charts.sgaBreak=new Chart(document.getElementById('chartSgaBreak'),{type:'doughnut',
+      data:{labels:sgaData.map(s=>s.label),datasets:[{data:sgaData.map(s=>s.value),backgroundColor:sgaData.map(s=>s.color+'aa'),borderColor:sgaData.map(s=>s.color),borderWidth:1}]},
+      options:{...dOpts,cutout:'55%'}});
+  }
 }
 
 // ============ RECEITAS ============
