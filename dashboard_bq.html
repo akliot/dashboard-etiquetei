@@ -263,7 +263,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card"><h3>Custos: Cascata por Tipo <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartCustosStack"></canvas></div><p class="chart-note">Custo Direto (2.01) + SG&A (2.02-2.04) + Outros → Total</p></div>
-        <div class="chart-card"><h3>Receitas: Realizado vs A Realizar <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasStack"></canvas></div><p class="chart-note">Recebido vs pendente (A Vencer + Atrasado)</p></div>
+        <div class="chart-card"><h3>Receitas: Realizado vs A Realizar <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartReceitasStack"></canvas></div><p class="chart-note">Por linha de receita — Mensalidade, Setup, Etiquetas, Locação, Comissionamento, Fat. Direto, Financiamento, Outros. Recebido vs pendente.</p></div>
       </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
@@ -1140,9 +1140,18 @@ function renderFluxoCaixa(d){
   const sgaCodes=new Set(['2.02','2.03','2.04','2.10']);
   const custoDiretoCod='2.01';
   const LFC=dadosFiltrados.lancamentos;
-  // Agregar por tipo de custo
+  // Agregar por tipo de custo e por linha de receita
   const tiposCusto={direto:{nome:'Custo Direto',done:0,open:0},sga:{nome:'SG&A',done:0,open:0},outros:{nome:'Outros',done:0,open:0}};
-  const tiposRec={receita:{nome:'Receitas',done:0,open:0}};
+  const tiposRec={
+    '1.01.02':{nome:'Mensalidade',done:0,open:0,ordem:1},
+    '1.01.03':{nome:'Setup',done:0,open:0,ordem:2},
+    '1.01.99':{nome:'Etiquetas',done:0,open:0,ordem:3},
+    '1.01.98':{nome:'Locação',done:0,open:0,ordem:4},
+    '1.01.01':{nome:'Comissionamento',done:0,open:0,ordem:5},
+    '1.04.02':{nome:'Fat. Direto',done:0,open:0,ordem:6},
+    '1.04.03':{nome:'Financiamento',done:0,open:0,ordem:7},
+    'outros':{nome:'Outros',done:0,open:0,ordem:99}
+  };
   LFC.forEach(l=>{
     const g=getGrupo(l.categoria);
     const done=isDoneFC(l.status);
@@ -1152,7 +1161,10 @@ function renderFluxoCaixa(d){
       else if(sgaCodes.has(g)) bucket='sga';
       if(done) tiposCusto[bucket].done+=l.valor; else tiposCusto[bucket].open+=l.valor;
     } else {
-      if(done) tiposRec.receita.done+=l.valor; else tiposRec.receita.open+=l.valor;
+      const cat=l.categoria||'';
+      let bucket=tiposRec[cat]?cat:'outros';
+      if(!tiposRec[cat]&&g==='1.04')bucket=cat==='1.04.03'?'1.04.03':'1.04.02';
+      if(done) tiposRec[bucket].done+=l.valor; else tiposRec[bucket].open+=l.valor;
     }
   });
 
@@ -1181,7 +1193,7 @@ function renderFluxoCaixa(d){
     ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}},onClick:()=>{}},datalabels:{display:function(ctx){return ctx.datasetIndex>0&&ctx.dataset.data[ctx.dataIndex]>0},color:'#e2e8f0',font:{size:9,weight:500},formatter:v=>fmtK(v)}}}
   });
 
-  const recArr=Object.values(tiposRec).filter(t=>t.done+t.open>0);
+  const recArr=Object.values(tiposRec).filter(t=>t.done+t.open>0).sort((a,b)=>a.ordem-b.ordem);
   charts.receitasStack=new Chart(document.getElementById('chartReceitasStack'),{type:'bar',data:{
     labels:recArr.map(t=>t.nome),
     datasets:[
