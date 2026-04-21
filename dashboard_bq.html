@@ -259,7 +259,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card"><h3>Despesas por Grupo <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartDespGrupo"></canvas></div><p class="chart-note">Grupos de categoria (2 primeiros níveis do plano de contas)</p></div>
-        <div class="chart-card"><h3>Receitas por Grupo <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecGrupo"></canvas></div><p class="chart-note">1.04 desmembrado em Fat. Direto e Financiamento</p></div>
+        <div class="chart-card"><h3>Receitas por Grupo <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecGrupo"></canvas></div><p class="chart-note">1.01 desmembrado em Mensalidade/Setup/Etiquetas/Locação/Comissionamento; 1.04 em Fat. Direto e Financiamento</p></div>
       </div>
       <div class="chart-row">
         <div class="chart-card"><h3>Custos: Cascata por Tipo <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartCustosStack"></canvas></div><p class="chart-note">Custo Direto (2.01) + SG&A (2.02-2.04) + Outros → Total</p></div>
@@ -587,9 +587,12 @@ function compute(){
   const porProj={};L.forEach(l=>{if(!l.projeto)return;const k=l.projeto;if(!porProj[k])porProj[k]={nome:l.projeto_nome,entrada:0,saida:0,ent_sk:0,ent_fd:0,sai_sk:0,sai_fd:0};const fd=l.is_fd;if(l.tipo==='entrada'){porProj[k].entrada+=l.valor;if(fd)porProj[k].ent_fd+=l.valor;else porProj[k].ent_sk+=l.valor}else{porProj[k].saida+=l.valor;if(fd)porProj[k].sai_fd+=l.valor;else porProj[k].sai_sk+=l.valor}});
   const porCliente={};L.filter(l=>l.tipo==='entrada'&&l.cliente_nome).forEach(l=>{const k=l.cliente_nome;porCliente[k]=(porCliente[k]||0)+l.valor});
   const gruposDesp={},gruposRec={};
+  const _nomesLinhasSaaS={'1.01.01':'Comissionamento','1.01.02':'Mensalidade','1.01.03':'Setup','1.01.98':'Locação','1.01.99':'Etiquetas'};
   L.forEach(l=>{const g=getGrupo(l.categoria);if(!g)return;const gn=dadosFiltrados.categorias?.[g]||g;if(l.tipo==='saida'){gruposDesp[g]=gruposDesp[g]||{nome:gn,valor:0};gruposDesp[g].valor+=l.valor}else{
-    // Quebrar grupo 1.04 em Fat. Direto vs Financiamento
-    if(g==='1.04'){const cat=l.categoria||'';if(cat==='1.04.03'){const k='1.04.03';gruposRec[k]=gruposRec[k]||{nome:'Financiamento',valor:0};gruposRec[k].valor+=l.valor}else{const k='1.04.02';gruposRec[k]=gruposRec[k]||{nome:'Fat. Direto',valor:0};gruposRec[k].valor+=l.valor}}
+    // Quebrar 1.01 nas linhas SaaS (mensalidade, setup, etc.)
+    if(g==='1.01'){const cat=l.categoria||'';const k=cat;const nome=_nomesLinhasSaaS[cat]||dadosFiltrados.categorias?.[cat]||cat;gruposRec[k]=gruposRec[k]||{nome,valor:0};gruposRec[k].valor+=l.valor}
+    // Quebrar 1.04 em Fat. Direto vs Financiamento
+    else if(g==='1.04'){const cat=l.categoria||'';if(cat==='1.04.03'){const k='1.04.03';gruposRec[k]=gruposRec[k]||{nome:'Financiamento',valor:0};gruposRec[k].valor+=l.valor}else{const k='1.04.02';gruposRec[k]=gruposRec[k]||{nome:'Fat. Direto',valor:0};gruposRec[k].valor+=l.valor}}
     else{gruposRec[g]=gruposRec[g]||{nome:gn,valor:0};gruposRec[g].valor+=l.valor}
   }});
 
