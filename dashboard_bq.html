@@ -139,6 +139,12 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .geo-tile .val{font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;font-family:'JetBrains Mono',monospace}
 .geo-tile .clientes-count{font-size:9px;color:rgba(255,255,255,.5);margin-top:1px}
 .geo-tile.zero{opacity:.25}
+/* Cohort Retention */
+.cohort-table{width:100%;border-collapse:separate;border-spacing:2px;font-size:11px;font-variant-numeric:tabular-nums}
+.cohort-table th{padding:6px 8px;font-weight:600;color:rgba(255,255,255,.55);font-size:10px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+.cohort-table td{padding:6px 8px;text-align:center;border-radius:4px;color:#fff;font-weight:600;white-space:nowrap}
+.cohort-table td.cohort-label{background:transparent;color:rgba(255,255,255,.75);text-align:left;font-weight:500}
+.cohort-table td.cohort-empty{background:transparent;color:rgba(255,255,255,.2)}
 /* Visão Geral — Premium Design */
 #page-visao-geral{font-family:'DM Sans',system-ui,sans-serif}
 #page-visao-geral .vg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
@@ -340,6 +346,13 @@ tr:hover td{background:rgba(74,144,255,.04)}
           <h3>MRR Bridge Mensal <span class="regime-badge competencia">Contratos</span></h3>
           <div class="chart-container" style="height:320px"><canvas id="chartMrrBridge"></canvas></div>
           <p class="chart-note">Variação de MRR mês a mês derivada dos contratos. Verde = MRR de novos contratos · Vermelho = MRR de contratos encerrados · Linha azul = MRR fim do mês. NRR = MRR fim ÷ MRR início.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Cohort Retention — Contratos <span class="regime-badge competencia">Contratos</span></h3>
+          <div id="cohortTable" style="overflow-x:auto"></div>
+          <p class="chart-note">Linha = mês de início do contrato (cohort). Coluna = meses desde início (M0, M1, M2...). Célula = % do cohort ainda ativo. Verde = alta retenção · Vermelho = alta perda. Limitação: usa status atual + vigencia_fim (não reflete pausas/retornos).</p>
         </div>
       </div>
       <div class="chart-row">
@@ -1879,6 +1892,7 @@ function renderVendas(dc){
 
   // MRR Bridge a partir da base de contratos
   renderMrrBridge((dadosOriginal.contratos||{}).lista||[]);
+  renderCohort((dadosOriginal.contratos||{}).lista||[]);
 
   // Meses ordenados (união de todos)
   const allMeses=new Set();
@@ -1996,6 +2010,81 @@ function renderMrrProjChart(proj){
       y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
       y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta mês (R$)',color:'#94a3b8'}}},
     plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
+}
+
+function renderCohort(lista){
+  const el=document.getElementById('cohortTable');
+  if(!el)return;
+  if(!lista||!lista.length){el.innerHTML='<p style="color:var(--muted);padding:16px">Sem contratos.</p>';return}
+  const hoje=new Date();
+  // 12 meses de cohorts (12 atrás até mês atual)
+  const cohorts=[];
+  for(let i=12;i>=0;i--){
+    const dt=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    const y=dt.getFullYear(),m=dt.getMonth();
+    cohorts.push({
+      mes:y+'-'+String(m+1).padStart(2,'0'),
+      start:new Date(y,m,1),
+      end:new Date(y,m+1,0,23,59,59),
+      contratos:[]
+    });
+  }
+  // Associar contratos
+  lista.forEach(c=>{
+    if(!c.vigencia_inicio_iso)return;
+    const vi=new Date(c.vigencia_inicio_iso+'T00:00:00');
+    const co=cohorts.find(x=>vi>=x.start&&vi<=x.end);
+    if(co)co.contratos.push(c);
+  });
+  // Placeholder detect
+  const ehPlaceholder=vf=>vf.getFullYear()===2028&&vf.getMonth()===11&&vf.getDate()===31;
+  // Calcular retenção M0..M12
+  const maxN=12;
+  const rows=cohorts.map(co=>{
+    const cells=[];
+    for(let n=0;n<=maxN;n++){
+      // Data-alvo = fim do mês cohort + n meses
+      const target=new Date(co.end);
+      target.setMonth(target.getMonth()+n);
+      if(target>hoje){cells.push(null);continue}
+      if(co.contratos.length===0){cells.push(null);continue}
+      const ativos=co.contratos.filter(c=>{
+        if(!c.vigencia_fim_iso)return true;
+        const vf=new Date(c.vigencia_fim_iso+'T00:00:00');
+        if(ehPlaceholder(vf))return true;
+        return vf>=target;
+      }).length;
+      const pct=(ativos/co.contratos.length)*100;
+      cells.push({pct,ativos,total:co.contratos.length});
+    }
+    return{cohort:co.mes,total:co.contratos.length,cells};
+  });
+  // Cor gradiente: 100% verde (#3DDC97) → 50% amarelo (#FFB547) → 0% vermelho (#FF6B6B)
+  const corRet=pct=>{
+    if(pct>=95)return'rgba(61,220,151,.75)';
+    if(pct>=80)return'rgba(61,220,151,.55)';
+    if(pct>=65)return'rgba(255,181,71,.60)';
+    if(pct>=50)return'rgba(255,181,71,.45)';
+    if(pct>=30)return'rgba(255,107,107,.50)';
+    return'rgba(255,107,107,.7)';
+  };
+  // Build HTML
+  let html='<table class="cohort-table"><thead><tr><th style="min-width:90px;text-align:left">Cohort</th><th>Contratos</th>';
+  for(let n=0;n<=maxN;n++)html+='<th>M'+n+'</th>';
+  html+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    html+='<tr><td class="cohort-label"><strong>'+mesNome(r.cohort)+'</strong></td><td class="cohort-label">'+r.total+'</td>';
+    r.cells.forEach(cell=>{
+      if(cell===null){html+='<td class="cohort-empty">—</td>'}
+      else{
+        const cor=corRet(cell.pct);
+        html+='<td style="background:'+cor+'" title="'+cell.ativos+' de '+cell.total+' ativos">'+cell.pct.toFixed(0)+'%</td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
 }
 
 function renderMrrBridge(lista){
