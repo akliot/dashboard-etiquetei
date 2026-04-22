@@ -1118,14 +1118,26 @@ function renderVisaoGeral(d,dc){
       {data:vcYoY,borderColor:'rgba(255,255,255,.2)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}]
   },options:{...sparkOpts,plugins:{...sparkOpts.plugins,datalabels:{...sparkDL,formatter:v=>v+'%'}},scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk4Max,suggestedMin:-spk4Max}}}});
 
-  // Spark 5: Faturamento (competência, só receita operacional — usa dc.porMesOp)
+  // Spark 5: Faturamento (competência, só receita operacional — usa dc.porMesOp) + YoY
   const fatPorMes={};
   m6.forEach(m=>{fatPorMes[m]=dc?.porMesOp?.[m]?.entrada||0});
   const fatData=m6.map(m=>fatPorMes[m]||0);
-  const spk5Max=Math.max(...fatData)*1.2;
-  charts.spkFat=new Chart(document.getElementById('sparkFat'),{type:'bar',data:{
+  // YoY faturamento: mesmo mês ano anterior — usa dadosOriginal.lancamentos filtrado por competência
+  const allFatPorMes={};
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='entrada'||l.status==='ATRASADO')return;
+    if(REC_OP_EXCLUIR.has(l.categoria))return;
+    const m=toYM(l.data_vencimento||l.data);if(!m)return;
+    allFatPorMes[m]=(allFatPorMes[m]||0)+l.valor;
+  });
+  const fatYoY=m6.map(m=>{const prev=allFatPorMes[getYoYMonth(m)];return prev!=null?prev:null});
+  const spk5Max=Math.max(...fatData,...fatYoY.filter(v=>v!=null),1)*1.2;
+  charts.spkFat=new Chart(document.getElementById('sparkFat'),{data:{
     labels:m6.map(mesNome),
-    datasets:[{data:fatData,backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1,borderRadius:4}]
+    datasets:[
+      {type:'bar',data:fatData,backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1,borderRadius:4},
+      {type:'line',data:fatYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+    ]
   },options:{...sparkOpts,layout:{padding:{top:25}},scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk5Max}}}});
 
   // Spark 6: Inadimplência por mês de vencimento (% atrasado hoje / faturamento competência do mês)
@@ -1685,19 +1697,30 @@ function renderFinanceiro(d){
         datalabels:{display:true,color:'#e2e8f0',font:{size:9,weight:500},anchor:'end',align:'top',formatter:v=>fmtK(v)}}]},
     options:cOpts('currency')});
 
-  // ---- Receita Bruta vs Custo Direto vs SG&A (stacked) ----
+  // ---- Receita Bruta vs Custo Direto vs SG&A (stacked) + YoY Receita ----
   if(charts.finStack){charts.finStack.destroy();delete charts.finStack}
-  charts.finStack=new Chart(document.getElementById('chartFinStack'),{type:'bar',
+  // YoY Receita Bruta — soma entradas 1.01.* por data_vencimento (competência, excluindo ATRASADO) de todos os dados
+  const allRecBrutaPorMes={};
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='entrada'||l.status==='ATRASADO')return;
+    const cat=l.categoria||'';
+    if(!cat.startsWith('1.01.'))return;
+    const m=toYM(l.data_vencimento||l.data);if(!m)return;
+    allRecBrutaPorMes[m]=(allRecBrutaPorMes[m]||0)+l.valor;
+  });
+  const yoyReceita=meses.map(m=>{const v=allRecBrutaPorMes[getYoYMonth(m)];return v!=null?v:null});
+  charts.finStack=new Chart(document.getElementById('chartFinStack'),{
     data:{labels:meses.map(mesNome),datasets:[
-      {label:'Receita Bruta',data:meses.map(m=>dre.receitaBruta[m]),backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
-      {label:'Custo Direto',data:meses.map(m=>dre.cmv[m]),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1},
-      {label:'SG&A',data:meses.map(m=>dre.sgaTotal[m]),backgroundColor:'#eab30888',borderColor:'#eab308',borderWidth:1}
+      {type:'bar',label:'Receita Bruta',data:meses.map(m=>dre.receitaBruta[m]),backgroundColor:'#22c55e88',borderColor:'#22c55e',borderWidth:1},
+      {type:'bar',label:'Custo Direto',data:meses.map(m=>dre.cmv[m]),backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1},
+      {type:'bar',label:'SG&A',data:meses.map(m=>dre.sgaTotal[m]),backgroundColor:'#eab30888',borderColor:'#eab308',borderWidth:1},
+      {type:'line',label:'Receita Ano Ant.',data:yoyReceita,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
         y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
       plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
-        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#cbd5e1',font:{size:8,weight:500},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
+        datalabels:{display:ctx=>ctx.dataset.type==='bar'&&ctx.dataset.data[ctx.dataIndex]>0,color:'#cbd5e1',font:{size:8,weight:500},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
 
   // ---- SG&A Composição (doughnut) ----
   if(charts.sgaBreak){charts.sgaBreak.destroy();delete charts.sgaBreak}
