@@ -456,6 +456,18 @@ tr:hover td{background:rgba(74,144,255,.04)}
         <button class="periodo-btns" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px" onclick="setCobrancaLinha('todas',this)">Todas</button>
       </div>
       <div class="chart-row">
+        <div class="chart-card">
+          <h3>Aging — Faixas de Atraso <span class="regime-badge caixa">Posição Atual</span></h3>
+          <div class="chart-container" style="height:260px"><canvas id="chartCobAging"></canvas></div>
+          <p class="chart-note">Distribuição dos títulos atrasados por faixa de dias. Meta: concentrar em 0-30d; &gt;90d = risco alto.</p>
+        </div>
+        <div class="chart-card">
+          <h3>Inadimplência por Mês de Vencimento <span class="regime-badge caixa">Posição Atual</span></h3>
+          <div class="chart-container" style="height:260px"><canvas id="chartCobVencMes"></canvas></div>
+          <p class="chart-note">R$ atrasado hoje agrupado pelo mês do vencimento original. Mais antigo à esquerda.</p>
+        </div>
+      </div>
+      <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
           <h3>Títulos Inadimplentes <span class="regime-badge caixa">Posição Atual</span></h3>
           <input type="text" class="search-input" id="cobrancaBusca" placeholder="🔍 Buscar cliente..." oninput="filtrarCobranca()">
@@ -2403,6 +2415,8 @@ function setCobrancaLinha(cat,el){
 function _renderCobrancaView(){
   if(charts.cobLinha){charts.cobLinha.destroy();delete charts.cobLinha}
   if(charts.cobCli){charts.cobCli.destroy();delete charts.cobCli}
+  if(charts.cobAging){charts.cobAging.destroy();delete charts.cobAging}
+  if(charts.cobVencMes){charts.cobVencMes.destroy();delete charts.cobVencMes}
 
   const filtered=_cobrancaLinha==='todas'?_cobrancaAll:_cobrancaAll.filter(t=>t.linhaCat===_cobrancaLinha);
   const q=(document.getElementById('cobrancaBusca')?.value||'').toLowerCase();
@@ -2410,20 +2424,64 @@ function _renderCobrancaView(){
 
   const total=filtered.reduce((s,t)=>s+t.valor,0);
   const count=filtered.length;
-  const diasMedio=count>0?Math.round(filtered.reduce((s,t)=>s+t.dias,0)/count):0;
+  // Atraso médio PONDERADO por valor (mais informativo que média simples)
+  const diasPonderado=total>0?Math.round(filtered.reduce((s,t)=>s+t.dias*t.valor,0)/total):0;
+  const diasSimples=count>0?Math.round(filtered.reduce((s,t)=>s+t.dias,0)/count):0;
+  // Aging buckets
+  const bucketDefs=[
+    {label:'0-30d',min:0,max:30,cor:'#3DDC97'},
+    {label:'31-60d',min:31,max:60,cor:'#4A90FF'},
+    {label:'61-90d',min:61,max:90,cor:'#FFB547'},
+    {label:'>90d',min:91,max:999999,cor:'#FF6B6B'}
+  ];
+  const buckets=bucketDefs.map(b=>({...b,count:0,valor:0}));
+  filtered.forEach(t=>{for(const b of buckets){if(t.dias>=b.min&&t.dias<=b.max){b.count+=1;b.valor+=t.valor;break}}});
+  const valor90=buckets[3].valor;
+  const pct90=total>0?(valor90/total*100):0;
 
   // Maior devedor
   const porCliente={};
   filtered.forEach(t=>{porCliente[t.cliente]=(porCliente[t.cliente]||0)+t.valor});
   const cliSorted=Object.entries(porCliente).sort((a,b)=>b[1]-a[1]);
   const maiorDevedor=cliSorted.length?cliSorted[0][0]:'—';
+  const _esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 
   // KPIs
-  document.getElementById('kpi-cobranca').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">Total Inadimplente</div><div class="kpi-value red">${fmt(total)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Títulos Atrasados</div><div class="kpi-value yellow">${fmtNum(count)}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Dias Médio de Atraso</div><div class="kpi-value ${diasMedio>90?'red':diasMedio>30?'yellow':'blue'}">${diasMedio}d</div></div>
-    <div class="kpi-card"><div class="kpi-label">Maior Devedor</div><div class="kpi-value" style="font-size:16px;color:var(--text)">${maiorDevedor.substring(0,25)}</div><div class="kpi-sub">${cliSorted.length?fmt(cliSorted[0][1]):''}</div></div>`;
+  const kpiHtml=
+    '<div class="kpi-card"><div class="kpi-label">Total Inadimplente</div><div class="kpi-value red">'+fmt(total)+'</div><div class="kpi-sub">'+fmtNum(count)+' títulos</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Atraso Médio (ponderado)</div><div class="kpi-value '+(diasPonderado>90?'red':diasPonderado>30?'yellow':'blue')+'">'+diasPonderado+'d</div><div class="kpi-sub">Simples: '+diasSimples+'d</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Risco Alto (&gt;90d)</div><div class="kpi-value '+(pct90>30?'red':pct90>15?'yellow':'green')+'">'+pct90.toFixed(0)+'%</div><div class="kpi-sub">'+fmt(valor90)+' em '+buckets[3].count+' títulos</div></div>'+
+    '<div class="kpi-card"><div class="kpi-label">Maior Devedor</div><div class="kpi-value" style="font-size:16px;color:var(--text)">'+_esc(maiorDevedor.substring(0,25))+'</div><div class="kpi-sub">'+(cliSorted.length?fmt(cliSorted[0][1]):'')+'</div></div>';
+  document.getElementById('kpi-cobranca').innerHTML=kpiHtml;
+
+  // Aging chart
+  charts.cobAging=new Chart(document.getElementById('chartCobAging'),{type:'bar',
+    data:{labels:buckets.map(b=>b.label),datasets:[{data:buckets.map(b=>b.valor),backgroundColor:buckets.map(b=>b.cor+'aa'),borderColor:buckets.map(b=>b.cor),borderWidth:1,borderRadius:4,
+      datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',offset:4,
+        formatter:(v,ctx)=>{const b=buckets[ctx.dataIndex];const pct=total>0?(v/total*100).toFixed(0):0;return fmtK(v)+' · '+b.count+'t · '+pct+'%'}}}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
+      scales:{x:{ticks:{color:'#94a3b8',font:{size:11,weight:600}},grid:{display:false}},
+        y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{display:false}}}});
+
+  // Por mês de vencimento (histórico dos atrasados atuais)
+  const porMesVenc={};
+  filtered.forEach(t=>{const dv=parseDate(t.vencimento);if(!dv)return;const m=`${dv.getFullYear()}-${String(dv.getMonth()+1).padStart(2,'0')}`;if(!porMesVenc[m])porMesVenc[m]={valor:0,count:0};porMesVenc[m].valor+=t.valor;porMesVenc[m].count+=1});
+  const mesesVenc=Object.keys(porMesVenc).sort();
+  charts.cobVencMes=new Chart(document.getElementById('chartCobVencMes'),{type:'bar',
+    data:{labels:mesesVenc.map(mesNome),datasets:[{data:mesesVenc.map(m=>porMesVenc[m].valor),backgroundColor:mesesVenc.map((m,i)=>{
+      // Cor baseada em idade: mais antigos vermelhos, recentes verdes
+      const hoje=new Date();
+      const [y,mo]=m.split('-').map(Number);
+      const idade=(hoje.getFullYear()-y)*12+(hoje.getMonth()+1-mo);
+      return idade>3?'#FF6B6Baa':idade>1?'#FFB547aa':'#3DDC97aa';
+    }),borderColor:'#0F1420',borderWidth:1,borderRadius:4,
+      datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:9,weight:600},anchor:'end',align:'top',offset:2,
+        formatter:(v,ctx)=>{const m=mesesVenc[ctx.dataIndex];return fmtK(v)+' · '+porMesVenc[m].count+'t'}}}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
+      scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},
+        y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{display:false}}}});
 
   // Tabela
   renderCobrancaTabela(display);
