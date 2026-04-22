@@ -111,6 +111,7 @@ def build_json() -> dict:
             "categoria_nome": r.get("categoria_nome", ""),
             "projeto": proj_id,
             "projeto_nome": r.get("projeto_nome", "Sem projeto") or "Sem projeto",
+            "cliente_id": r.get("cliente_id"),
             "cliente_nome": r.get("cliente_nome", "") or "",
             "is_fd": bool(r.get("is_faturamento_direto")),
             "modalidade": r.get("modalidade") or ("FD" if r.get("is_faturamento_direto") else "SK"),
