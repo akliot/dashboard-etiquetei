@@ -3124,26 +3124,91 @@ function gerarRelatorioPDF(){
 
   footer(1);
 
-  // ============ PAGE 2 — DRE e Tendência ============
+  // ============ PAGE 2 — DRE Estruturada ============
   doc.addPage();bg(2);
-  doc.setFontSize(14);setC(WHITE);doc.setFont('helvetica','bold');doc.text('DRE e Tendência',15,18);
-  doc.setFontSize(9);setC(MUTED);doc.setFont('helvetica','normal');doc.text(`Período: ${periodoStr}`,15,25);
+  doc.setFontSize(14);setC(WHITE);doc.setFont('helvetica','bold');doc.text('DRE — Demonstrativo de Resultados',15,18);
+  doc.setFontSize(9);setC(MUTED);doc.setFont('helvetica','normal');doc.text(`Período: ${periodoStr} · Regime de competência · Simples Nacional`,15,25);
 
-  // Charts — Receita vs Despesa sparkline
+  // Constrói DRE pro período do filtro usando computeAllTimeDre (já computa tudo)
+  const atDre=(typeof computeAllTimeDre==='function')?computeAllTimeDre():{};
+  const mesesPdf=(typeof gerarMesesPeriodo==='function')?gerarMesesPeriodo():[];
+  // Últimos 6 meses se mais que 6
+  const mesesDreExib=mesesPdf.length>6?mesesPdf.slice(-6):mesesPdf;
+  const valM=(m,k)=>(atDre[m]?.[k])||0;
+  const sumPer=k=>mesesDreExib.reduce((s,m)=>s+valM(m,k),0);
+  const totais={rb:sumPer('rb'),das:sumPer('das'),cmv:sumPer('cmv'),com:sumPer('com'),pes:sumPer('pes'),adm:sumPer('adm'),fin:sumPer('fin')};
+  totais.rl=totais.rb-totais.das;
+  totais.mb=totais.rl-totais.cmv;
+  totais.sga=totais.com+totais.pes+totais.adm;
+  totais.ebitda=totais.mb-totais.sga;
+  totais.ll=totais.ebitda-totais.fin;
+
+  // Layout da tabela
+  const xStart=15;
+  const colLabelW=55;
+  const colW=Math.min(30,(W-xStart-colLabelW-45)/mesesDreExib.length);
+  const colTotalW=30;
+  const colPctW=18;
   let tY=40;
-  doc.setFontSize(10);setC(WHITE);doc.setFont('helvetica','bold');doc.text('Receita vs Despesa (6m)',15,tY);
+  // Header
+  doc.setFontSize(8);setC(MUTED);doc.setFont('helvetica','bold');
+  doc.text('Conta',xStart,tY);
+  mesesDreExib.forEach((m,i)=>{
+    const[y,mo]=m.split('-');const label=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mo-1]+'/'+y.slice(2);
+    doc.text(label,xStart+colLabelW+i*colW+colW-2,tY,{align:'right'});
+  });
+  doc.text('Total',xStart+colLabelW+mesesDreExib.length*colW+colTotalW-2,tY,{align:'right'});
+  doc.text('% RL',xStart+colLabelW+mesesDreExib.length*colW+colTotalW+colPctW-2,tY,{align:'right'});
   tY+=3;
-  try{
-    const imgRD=charts.spkRD.toBase64Image('image/png',1);
-    doc.addImage(imgRD,'PNG',15,tY,120,45);
-  }catch(e){}
+  doc.setDrawColor(100,116,139);doc.setLineWidth(.2);doc.line(xStart,tY,W-15,tY);
+  tY+=4;
 
-  // EBITDA sparkline
-  doc.setFontSize(10);setC(WHITE);doc.setFont('helvetica','bold');doc.text('EBITDA (6m)',155,tY-3);
-  try{
-    const imgEB=charts.spkEbitda.toBase64Image('image/png',1);
-    doc.addImage(imgEB,'PNG',155,tY,120,45);
-  }catch(e){}
+  const fmtV=v=>v===0?'—':(v<0?'('+Math.abs(v/1000).toFixed(1)+'K)':(v/1000).toFixed(1)+'K');
+  const pctV=v=>totais.rl>0?(v/totais.rl*100).toFixed(1)+'%':'—';
+  const linhasDre=[
+    {label:'Receita Bruta',key:'rb',sub:false,tot:false,ded:false},
+    {label:'(−) DAS (Simples)',key:'das',sub:true,tot:false,ded:true},
+    {label:'= Receita Líquida',key:'rl',sub:false,tot:true,ded:false,color:BLUE},
+    {label:'(−) Custo Direto',key:'cmv',sub:true,tot:false,ded:true},
+    {label:'= Margem Bruta',key:'mb',sub:false,tot:true,ded:false,color:totais.mb>=0?GREEN:RED},
+    {label:'(−) Comercial',key:'com',sub:true,tot:false,ded:true},
+    {label:'(−) Pessoal',key:'pes',sub:true,tot:false,ded:true},
+    {label:'(−) Admin',key:'adm',sub:true,tot:false,ded:true},
+    {label:'= EBITDA',key:'ebitda',sub:false,tot:true,ded:false,color:totais.ebitda>=0?GREEN:RED},
+    {label:'(−) Financeiras',key:'fin',sub:true,tot:false,ded:true},
+    {label:'= Lucro Líquido',key:'ll',sub:false,tot:true,ded:false,color:totais.ll>=0?GREEN:RED}
+  ];
+  doc.setFontSize(8);
+  linhasDre.forEach(ln=>{
+    if(ln.tot){doc.setFillColor(30,41,59);doc.rect(xStart-2,tY-3.5,W-xStart-12,4.5,'F')}
+    if(ln.tot){doc.setFont('helvetica','bold')}else{doc.setFont('helvetica','normal')}
+    if(ln.tot){setC(ln.color||WHITE)}else if(ln.sub){setC(MUTED)}else{setC(WHITE)}
+    doc.text(ln.label,xStart,tY);
+    // Valores mensais
+    mesesDreExib.forEach((m,i)=>{
+      const v=ln.key==='rl'?(valM(m,'rb')-valM(m,'das')):
+              ln.key==='mb'?(valM(m,'rb')-valM(m,'das')-valM(m,'cmv')):
+              ln.key==='ebitda'?(valM(m,'rb')-valM(m,'das')-valM(m,'cmv')-valM(m,'com')-valM(m,'pes')-valM(m,'adm')):
+              ln.key==='ll'?(valM(m,'rb')-valM(m,'das')-valM(m,'cmv')-valM(m,'com')-valM(m,'pes')-valM(m,'adm')-valM(m,'fin')):
+              valM(m,ln.key);
+      if(ln.ded)setC('#FF8A8A');else if(ln.tot)setC(ln.color||WHITE);else setC(WHITE);
+      doc.text(fmtV(v),xStart+colLabelW+i*colW+colW-2,tY,{align:'right'});
+    });
+    // Total
+    const vTot=totais[ln.key];
+    if(ln.ded)setC('#FF8A8A');else if(ln.tot)setC(ln.color||WHITE);else setC(WHITE);
+    doc.text(fmtV(vTot),xStart+colLabelW+mesesDreExib.length*colW+colTotalW-2,tY,{align:'right'});
+    // % Rec Líq
+    setC(MUTED);
+    doc.text(pctV(vTot),xStart+colLabelW+mesesDreExib.length*colW+colTotalW+colPctW-2,tY,{align:'right'});
+    tY+=5;
+  });
+
+  // Nota rodapé
+  tY+=4;
+  doc.setFontSize(7);setC(MUTED);doc.setFont('helvetica','italic');
+  doc.text('Valores em R$K. Não inclui CAPEX (2.07), devoluções saída (2.09), empréstimos (2.10) — ficam fora do operacional.',xStart,tY);
+  doc.text('Regime de competência (data de vencimento, exclui atrasados). Ver Fluxo de Caixa pro regime caixa.',xStart,tY+4);
 
   footer(2);
 
