@@ -271,6 +271,14 @@ tr:hover td{background:rgba(74,144,255,.04)}
           <div class="chart-card"><h3>Top 10 Inadimplentes <span class="regime-badge caixa">Caixa</span></h3><div id="tblInadimplentes" style="max-height:280px;overflow-y:auto"></div></div>
         </div>
       </div>
+      <div class="kpi-row" id="kpi-projecao"></div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Projeção de Saldo (90 dias) <span class="regime-badge caixa">Caixa</span></h3>
+          <div class="chart-container" style="height:280px"><canvas id="chartProjecaoCaixa"></canvas></div>
+          <p class="chart-note">Partindo do saldo atual (D-1), aplica entradas e saídas pendentes (A Vencer + Atrasado) por data prevista. Linha tracejada amarela = piso crítico (3 meses de despesa operacional média).</p>
+        </div>
+      </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1"><h3>Receita vs Despesa (Mensal) <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartFluxoRecDesp"></canvas></div><p class="chart-note">Entradas e saídas por mês (data de pagamento)</p></div>
       </div>
@@ -1122,6 +1130,76 @@ function setFluxoVisao(visao,el){
   if(_fluxoData) renderFluxoTabela(_fluxoData);
 }
 
+function renderProjecaoCaixa(d){
+  const saldoAtual=(dadosFiltrados.saldos_bancarios||[]).reduce((s,b)=>s+b.saldo,0);
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  // Construir bucket por dia para 90 dias à frente
+  const deltaPorDia={};
+  for(let i=0;i<=90;i++){
+    const dt=new Date(hoje);dt.setDate(dt.getDate()+i);
+    deltaPorDia[dt.toISOString().substring(0,10)]=0;
+  }
+  const isDone=s=>['RECEBIDO','PAGO','LIQUIDADO','CANCELADO'].includes(s);
+  // Somar pendentes (A Vencer + Atrasado) por data_previsao; atrasados caem no dia de hoje
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(isDone(l.status))return;
+    const refStr=l.data_previsao||l.data_vencimento;
+    if(!refStr)return;
+    const ref=parseDate(refStr);
+    if(!ref)return;
+    const dtNorm=new Date(ref.getFullYear(),ref.getMonth(),ref.getDate());
+    // Atrasados ou com data no passado colam em hoje
+    const targetDate=dtNorm<hoje?hoje:dtNorm;
+    const k=targetDate.toISOString().substring(0,10);
+    if(!(k in deltaPorDia))return;
+    deltaPorDia[k]+=l.tipo==='entrada'?l.valor:-l.valor;
+  });
+  const dias=Object.keys(deltaPorDia).sort();
+  let saldoAcum=saldoAtual;
+  const saldos=dias.map(k=>{saldoAcum+=deltaPorDia[k];return saldoAcum});
+  const labels=dias.map(k=>{const[y,m,d]=k.split('-');return d+'/'+m});
+
+  // Saldos em 30/60/90
+  const saldo30=saldos[30]||saldoAtual, saldo60=saldos[60]||saldoAtual, saldo90=saldos[90]||saldoAtual;
+  // Runway — piso de 3 meses de despesa operacional média (baseado no d.tSDespOp do período filtrado)
+  const periodoMeses=Math.max(1,gerarMesesPeriodo().length);
+  const despOpMedia=(d.tSDespOp||0)/periodoMeses;
+  const pisoRunway=despOpMedia*3;
+  const minSaldo=Math.min(...saldos);
+  const diaMin=dias[saldos.indexOf(minSaldo)];
+  const diasAteFurar=saldos.findIndex(s=>s<pisoRunway);
+
+  // KPIs projeção
+  const kpiEl=document.getElementById('kpi-projecao');
+  if(kpiEl){
+    const corSaldo=v=>v<0?'red':v<pisoRunway?'yellow':'green';
+    const diaMinLabel=diaMin?diaMin.substring(5).split('-').reverse().join('/'):'—';
+    const alerta=diasAteFurar>=0?'<strong style="color:#FFB547">⚠ Piso em ~'+diasAteFurar+'d</strong>':'<strong style="color:#3DDC97">✓ Acima do piso</strong>';
+    kpiEl.innerHTML=
+      '<div class="kpi-card"><div class="kpi-label">Saldo Atual</div><div class="kpi-value blue">'+fmt(saldoAtual)+'</div><div class="kpi-sub">D-1 conciliado</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Em 30 dias</div><div class="kpi-value '+corSaldo(saldo30)+'">'+fmt(saldo30)+'</div><div class="kpi-sub">Δ '+fmt(saldo30-saldoAtual)+'</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Em 60 dias</div><div class="kpi-value '+corSaldo(saldo60)+'">'+fmt(saldo60)+'</div><div class="kpi-sub">Δ '+fmt(saldo60-saldoAtual)+'</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Em 90 dias</div><div class="kpi-value '+corSaldo(saldo90)+'">'+fmt(saldo90)+'</div><div class="kpi-sub">Δ '+fmt(saldo90-saldoAtual)+' · '+alerta+'</div></div>';
+  }
+
+  // Chart
+  if(charts.projecaoCx){charts.projecaoCx.destroy();delete charts.projecaoCx}
+  const pisoData=dias.map(()=>pisoRunway);
+  charts.projecaoCx=new Chart(document.getElementById('chartProjecaoCaixa'),{type:'line',
+    data:{labels,datasets:[
+      {label:'Saldo Projetado',data:saldos,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.15,pointRadius:0,borderWidth:2,
+        pointBackgroundColor:saldos.map(s=>s<0?'#FF6B6B':s<pisoRunway?'#FFB547':'#4A90FF'),
+        datalabels:{display:ctx=>[0,30,60,90].includes(ctx.dataIndex),color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',offset:4,formatter:(v,ctx)=>{const lbls={0:'Hoje',30:'+30d',60:'+60d',90:'+90d'};return lbls[ctx.dataIndex]+': '+fmtK(v)}}},
+      {label:'Piso Crítico (3m desp.)',data:pisoData,borderColor:'#FFB547',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,order:0,
+        datalabels:{display:false}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:28,right:30}},
+      scales:{x:{ticks:{color:'#94a3b8',maxTicksLimit:12},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>{if(ctx.datasetIndex===1)return 'Piso: '+fmt(pisoRunway);const idx=ctx.dataIndex;return ['Saldo: '+fmt(saldos[idx]),'Delta dia: '+fmt(deltaPorDia[dias[idx]])]}}}}}});
+}
+
 function renderFluxoCaixa(d){
   _fluxoData=d;
   const pctRecRealizado=d.tE>0?((d.rec/d.tE)*100).toFixed(0):'0';
@@ -1135,6 +1213,8 @@ function renderFluxoCaixa(d){
     <div class="kpi-card"><div class="kpi-label">Despesa Operacional</div><div class="kpi-value red">${fmt(despOp)}</div><div class="kpi-sub">Pago: ${fmt(d.pag)} (${pctPagRealizado}%) · A pagar: ${fmt(d.abPag)}${subDesp}</div></div>
     <div class="kpi-card"><div class="kpi-label">Resultado Operacional</div><div class="kpi-value ${recOp-despOp>=0?'green':'red'}">${fmt(recOp-despOp)}</div><div class="kpi-sub">Realizado: ${fmt(d.rec-d.pag)} · A realizar: ${fmt(d.abRec-d.abPag)}</div></div>
     <div class="kpi-card"><div class="kpi-label">Margem Operacional</div><div class="kpi-value blue">${recOp>0?((recOp-despOp)/recOp*100).toFixed(1):'0'}%</div></div>`;
+
+  renderProjecaoCaixa(d);
 
   // Charts — Receita vs Despesa, Saldo Acumulado, Variação %
   const fMeses=Object.keys(d.porMes).sort();
