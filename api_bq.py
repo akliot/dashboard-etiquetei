@@ -223,7 +223,7 @@ def build_json() -> dict:
 
     # ---- Clientes (resumo agregado) ----
     cli_rows = query_rows(f"""
-        SELECT id, nome_fantasia, estado, ativo, pessoa_fisica, data_cadastro
+        SELECT id, nome_fantasia, estado, cidade, cidade_ibge, ativo, pessoa_fisica, data_cadastro
         FROM {tbl('clientes')}
     """)
     por_estado: dict[str, int] = defaultdict(int)
@@ -251,8 +251,9 @@ def build_json() -> dict:
     # Top 15 estados
     top_estados = dict(sorted(por_estado.items(), key=lambda x: x[1], reverse=True)[:15])
 
-    # Mapa compacto cliente_id → estado (só ativos com estado, para join no frontend)
+    # Mapas compactos cliente_id → estado/cidade para join no frontend
     cli_estado_map = {str(r["id"]): r.get("estado") for r in cli_rows if r.get("estado")}
+    cli_cidade_map = {str(r["id"]): r.get("cidade") for r in cli_rows if r.get("cidade")}
     clientes = {
         "total_clientes": len(cli_rows),
         "ativos": ativos,
@@ -262,6 +263,7 @@ def build_json() -> dict:
         "por_estado": top_estados,
         "por_mes_cadastro": dict(por_mes_cadastro),
         "estado_por_id": cli_estado_map,
+        "cidade_por_id": cli_cidade_map,
     }
 
     # ---- Orçamento DRE (formato esperado pelo HTML: dre[], meses_disponiveis, meses_com_real) ----

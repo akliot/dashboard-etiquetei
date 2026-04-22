@@ -103,7 +103,8 @@ def ensure_tables(client: bigquery.Client) -> None:
             id INT64, nome STRING, sync_timestamp TIMESTAMP
         )""",
         f"""CREATE TABLE IF NOT EXISTS `{ds_ref}.clientes` (
-            id INT64, nome_fantasia STRING, razao_social STRING, estado STRING,
+            id INT64, nome_fantasia STRING, razao_social STRING,
+            estado STRING, cidade STRING, cidade_ibge STRING,
             ativo BOOL, pessoa_fisica BOOL, data_cadastro DATE, sync_timestamp TIMESTAMP
         )""",
         f"""CREATE TABLE IF NOT EXISTS `{ds_ref}.vendas_pedidos` (
@@ -735,11 +736,17 @@ def coletar_clientes_bq(registros_raw: list[dict], sync_ts: str) -> list[dict]:
         dt_inc = r.get("info", {}).get("dInc", "")
         data_cadastro = parse_date(dt_inc[:10]) if dt_inc else None
 
+        # Normalizar cidade: Omie retorna "APARECIDA (SP)" — remover sufixo " (UF)"
+        cidade_raw = r.get("cidade", "") or ""
+        import re as _re
+        cidade = _re.sub(r"\s*\([A-Z]{2}\)\s*$", "", cidade_raw).strip() or None
         clientes.append({
             "id": cid,
             "nome_fantasia": r.get("nome_fantasia", ""),
             "razao_social": r.get("razao_social", ""),
             "estado": r.get("estado", "") or None,
+            "cidade": cidade,
+            "cidade_ibge": r.get("cidade_ibge", "") or None,
             "ativo": r.get("inativo", "N") != "S",
             "pessoa_fisica": r.get("pessoa_fisica", "N") == "S",
             "data_cadastro": data_cadastro,
@@ -1091,9 +1098,10 @@ def main() -> None:
         counts["projetos"] = len(projetos_bq)
 
         # Clientes — MERGE por id
-        cli_cols = ["id", "nome_fantasia", "razao_social", "estado", "ativo", "pessoa_fisica",
-                    "data_cadastro", "sync_timestamp"]
-        cli_compare = ["nome_fantasia", "razao_social", "estado", "ativo", "pessoa_fisica"]
+        cli_cols = ["id", "nome_fantasia", "razao_social", "estado", "cidade", "cidade_ibge",
+                    "ativo", "pessoa_fisica", "data_cadastro", "sync_timestamp"]
+        cli_compare = ["nome_fantasia", "razao_social", "estado", "cidade", "cidade_ibge",
+                       "ativo", "pessoa_fisica"]
         merge_to_bq(client, "clientes", clientes_bq, "id", cli_compare, cli_cols)
         counts["clientes"] = len(clientes_bq)
 

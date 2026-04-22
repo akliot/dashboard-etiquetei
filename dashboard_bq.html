@@ -355,6 +355,17 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
+          <h3>Top Cidades por Receita <span class="regime-badge caixa">Caixa</span></h3>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+            <label style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Filtrar UF:</label>
+            <select id="geoCidadeUfFilter" onchange="renderAll()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;min-width:180px"><option value="">Todas as UFs</option></select>
+          </div>
+          <div class="chart-container" style="height:420px;margin-top:12px"><canvas id="chartGeoCidades"></canvas></div>
+          <p class="chart-note">Top 15 cidades por receita no período. Filtrar por UF pra drill-down. Cidades sem cadastro de localização aparecem como '—'.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
           <h3>Detalhamento por UF <span class="regime-badge caixa">Caixa</span></h3>
           <div class="proj-table" id="geoTabela"></div>
           <p class="chart-note">Clientes sem UF cadastrada aparecem como '—'. Junta lançamentos do período com cadastro atual de clientes.</p>
@@ -2228,8 +2239,9 @@ function filtrarCobranca(){
 
 // ============ PROJETOS ============
 function renderProjetos(dc){
-  // Aggregate receita operacional por cliente no período, joinando com estado
+  // Aggregate receita operacional por cliente no período, joinando com estado/cidade
   const estadoMap=(dadosOriginal.clientes||{}).estado_por_id||{};
+  const cidadeMap=(dadosOriginal.clientes||{}).cidade_por_id||{};
   const porCliente={};
   dadosFiltrados.lancamentos.forEach(l=>{
     if(!isRecOp(l))return;
@@ -2239,11 +2251,17 @@ function renderProjetos(dc){
     porCliente[cid].receita+=l.valor;
   });
   const porEstado={};
+  const porCidade={};
   Object.keys(porCliente).forEach(cid=>{
     const uf=estadoMap[cid]||'—';
+    const cidade=cidadeMap[cid]||'—';
     if(!porEstado[uf])porEstado[uf]={receita:0,clientes:0};
     porEstado[uf].receita+=porCliente[cid].receita;
     porEstado[uf].clientes+=1;
+    const chaveCidade=cidade+'|'+uf;
+    if(!porCidade[chaveCidade])porCidade[chaveCidade]={cidade,uf,receita:0,clientes:0};
+    porCidade[chaveCidade].receita+=porCliente[cid].receita;
+    porCidade[chaveCidade].clientes+=1;
   });
   const estados=Object.entries(porEstado).sort((a,b)=>b[1].receita-a[1].receita);
   const totalRec=estados.reduce((s,e)=>s+e[1].receita,0);
@@ -2303,6 +2321,23 @@ function renderProjetos(dc){
   const topTicket=topEstados.map(e=>({uf:e[0],ticket:e[1].clientes>0?e[1].receita/e[1].clientes:0}));
   charts.geoTicket=new Chart(document.getElementById('chartGeoTicket'),{type:'bar',
     data:{labels:topTicket.map(e=>e.uf),datasets:[{data:topTicket.map(e=>e.ticket),backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,borderRadius:4}]},
+    options:hBarOpts()});
+
+  // ---- Popula filtro UF do gráfico de cidades ----
+  const ufSel=document.getElementById('geoCidadeUfFilter');
+  if(ufSel){
+    const currentVal=ufSel.value;
+    const ufsDisponiveis=estados.filter(e=>e[0]!=='—').map(e=>e[0]);
+    ufSel.innerHTML='<option value="">Todas as UFs</option>'+ufsDisponiveis.map(uf=>'<option value="'+uf+'"'+(uf===currentVal?' selected':'')+'>'+uf+'</option>').join('');
+  }
+  // ---- Bar chart: Top Cidades por Receita (filtrável por UF) ----
+  if(charts.geoCidades){charts.geoCidades.destroy();delete charts.geoCidades}
+  const ufFiltro=ufSel?ufSel.value:'';
+  const cidadesArr=Object.values(porCidade).filter(c=>c.cidade!=='—'&&(!ufFiltro||c.uf===ufFiltro));
+  const topCidades=cidadesArr.sort((a,b)=>b.receita-a.receita).slice(0,15);
+  charts.geoCidades=new Chart(document.getElementById('chartGeoCidades'),{type:'bar',
+    data:{labels:topCidades.map(c=>c.cidade+' ('+c.uf+')'),datasets:[{data:topCidades.map(c=>c.receita),backgroundColor:'#A78BFAaa',borderColor:'#A78BFA',borderWidth:1,borderRadius:4,
+      datalabels:{display:true,color:'#cbd5e1',font:{size:10,weight:500},anchor:'end',align:'right',offset:4,formatter:(v,ctx)=>fmtK(v)+' · '+topCidades[ctx.dataIndex].clientes+'c'}}]},
     options:hBarOpts()});
 
   // ---- Tabela detalhada ----
