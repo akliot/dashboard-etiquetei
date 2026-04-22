@@ -6,6 +6,7 @@
 <title>Dashboard Financeiro — Etiquetei</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script>
 // URL da API — BigQuery Cloud Function ou servidor local
@@ -361,8 +362,15 @@ tr:hover td{background:rgba(74,144,255,.04)}
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
           <h3>Mapa do Brasil — Receita por Estado <span class="regime-badge caixa">Caixa</span></h3>
-          <div id="geoMap" style="min-height:380px;padding:16px 0"></div>
-          <p class="chart-note">Receita operacional por UF no período. Intensidade da cor = volume relativo. Dados reais — cobertura SaaS.</p>
+          <div style="height:520px;position:relative"><canvas id="chartGeoMap"></canvas></div>
+          <p class="chart-note">Choropleth: intensidade do azul = receita operacional do período. Hover mostra valor + clientes. Fonte geométrica: IBGE via click_that_hood.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>Heatmap por Região <span class="regime-badge caixa">Caixa</span></h3>
+          <div id="geoMap" style="padding:8px 0"></div>
+          <p class="chart-note">Visão compacta em tiles — estados agrupados por região, cor proporcional à receita (escala log).</p>
         </div>
       </div>
       <div class="chart-row">
@@ -779,6 +787,35 @@ let _saldoContaMode='d1';
 let _ebitdaMode='real';
 let _recMesMode='caixa';
 let _periodoTipo='personalizado';
+let _geoBrasilCache=null;
+
+async function loadBrasilGeoJson(){
+  if(_geoBrasilCache)return _geoBrasilCache;
+  try{
+    const r=await fetch('https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/brazil-states.geojson');
+    _geoBrasilCache=await r.json();
+    return _geoBrasilCache;
+  }catch(e){console.error('Falha ao carregar GeoJSON Brasil',e);return null}
+}
+
+async function renderChoroplethBR(porEstado){
+  if(charts.geoMap){charts.geoMap.destroy();delete charts.geoMap}
+  const geo=await loadBrasilGeoJson();
+  if(!geo)return;
+  const features=geo.features;
+  const data=features.map(f=>({feature:f,value:porEstado[f.properties.sigla]?.receita||0}));
+  charts.geoMap=new Chart(document.getElementById('chartGeoMap'),{type:'choropleth',
+    data:{labels:features.map(f=>f.properties.name),datasets:[{label:'Receita',outline:features,data,borderColor:'rgba(255,255,255,.15)',borderWidth:.5}]},
+    options:{responsive:true,maintainAspectRatio:false,showOutline:true,showGraticule:false,
+      plugins:{legend:{display:false},
+        datalabels:{display:false},
+        tooltip:{callbacks:{label:ctx=>{const f=features[ctx.dataIndex];const uf=f.properties.sigla;const d=porEstado[uf]||{receita:0,clientes:0};const ticket=d.clientes>0?fmt(d.receita/d.clientes):'—';return[f.properties.name+' ('+uf+')','Receita: '+fmt(d.receita),'Clientes: '+d.clientes,'Ticket médio: '+ticket]}}}},
+      scales:{xy:{axis:'x',projection:'mercator'},
+        color:{axis:'x',quantize:6,
+          interpolate:'blues',
+          missing:'rgba(255,255,255,.04)',
+          legend:{position:'bottom-right',align:'bottom',length:150,width:8}}}}});
+}
 function setEbitdaMode(mode,el){_ebitdaMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
 function setRecMesMode(mode,el){_recMesMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
 
@@ -2569,6 +2606,9 @@ function renderProjetos(dc){
     '<div class="kpi-card"><div class="kpi-label">Top UF</div><div class="kpi-value green">'+(topUf?topUf[0]:'—')+'</div><div class="kpi-sub">'+(topUf?fmt(topUf[1].receita)+' · '+topUf[1].clientes+' clientes':'sem dados')+'</div></div>'+
     '<div class="kpi-card"><div class="kpi-label">Concentração SP</div><div class="kpi-value '+(concentraSP>80?'red':concentraSP>50?'yellow':'green')+'">'+concentraSP.toFixed(0)+'%</div><div class="kpi-sub">da receita do período</div></div>'+
     '<div class="kpi-card"><div class="kpi-label">HHI — Concentração</div><div class="kpi-value '+hhiColor+'">'+hhi.toFixed(2)+'</div><div class="kpi-sub">'+hhiLabel+' — >0.25 é alta</div></div>';
+
+  // ---- Choropleth SVG real do Brasil ----
+  renderChoroplethBR(porEstado);
 
   // ---- Heatmap "mapa" — tiles por UF agrupados por região ----
   const REGIOES=[
