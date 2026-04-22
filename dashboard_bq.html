@@ -333,6 +333,14 @@ tr:hover td{background:rgba(74,144,255,.04)}
     <div class="page" id="page-vendas">
 
       <div class="kpi-row" id="kpi-vendas"></div>
+      <div class="kpi-row" id="kpi-mrr-bridge"></div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <h3>MRR Bridge Mensal <span class="regime-badge competencia">Contratos</span></h3>
+          <div class="chart-container" style="height:320px"><canvas id="chartMrrBridge"></canvas></div>
+          <p class="chart-note">Variação de MRR mês a mês derivada dos contratos. Verde = MRR de novos contratos · Vermelho = MRR de contratos encerrados · Linha azul = MRR fim do mês. NRR = MRR fim ÷ MRR início.</p>
+        </div>
+      </div>
       <div class="chart-row">
         <div class="chart-card" style="flex:3"><h3>Receita por Linha de Negócio <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecStack"></canvas></div><p class="chart-note">Receitas mensais empilhadas por linha</p></div>
         <div class="chart-card" style="flex:2"><h3>Composição da Receita Acumulada <span class="regime-badge caixa">Caixa</span></h3><div class="chart-container"><canvas id="chartRecWaterfall"></canvas></div><p class="chart-note">Waterfall: contribuição de cada linha</p></div>
@@ -1714,6 +1722,9 @@ function renderVendas(dc){
     <div class="kpi-card"><div class="kpi-label">Receita Setup</div><div class="kpi-value blue">${fmt(totalSetup)}</div></div>
     <div class="kpi-card"><div class="kpi-label">Margem Bruta</div><div class="kpi-value ${margemBruta>=30?'green':margemBruta>=15?'yellow':'red'}">${margemBruta.toFixed(1)}%</div></div>`;
 
+  // MRR Bridge a partir da base de contratos
+  renderMrrBridge((dadosOriginal.contratos||{}).lista||[]);
+
   // Meses ordenados (união de todos)
   const allMeses=new Set();
   Object.values(recPorLinhaMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
@@ -1829,6 +1840,71 @@ function renderMrrProjChart(proj){
     scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
       y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
       y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta mês (R$)',color:'#94a3b8'}}},
+    plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
+}
+
+function renderMrrBridge(lista){
+  if(charts.mrrBridge){charts.mrrBridge.destroy();delete charts.mrrBridge}
+  const kpiEl=document.getElementById('kpi-mrr-bridge');
+  if(!lista||!lista.length){if(kpiEl)kpiEl.innerHTML='';return}
+  const hoje=new Date();
+  // 12 meses passados + mês corrente (13 pontos)
+  const meses=[];
+  for(let i=12;i>=0;i--){
+    const dt=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    meses.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'));
+  }
+  const mrrMesFim=[],novoMes=[],churnMes=[];
+  meses.forEach(m=>{
+    const[y,mo]=m.split('-').map(Number);
+    const primDia=new Date(y,mo-1,1);
+    const ultDia=new Date(y,mo,0);
+    let mrr=0,novoMrr=0,churnMrr=0;
+    lista.forEach(c=>{
+      const vi=c.vigencia_inicio_iso?new Date(c.vigencia_inicio_iso+'T00:00:00'):null;
+      const vf=c.vigencia_fim_iso?new Date(c.vigencia_fim_iso+'T00:00:00'):null;
+      const v=c.valor_mensal||0;
+      // Ativo no mês: começou antes/dentro e não terminou antes (ou não tem fim)
+      const ativo=vi&&vi<=ultDia&&(!vf||vf>=primDia);
+      if(ativo)mrr+=v;
+      // Novo: vigencia_inicio no mês
+      if(vi&&vi>=primDia&&vi<=ultDia)novoMrr+=v;
+      // Churn: vigencia_fim no mês E status não-ativo (encerrou de verdade)
+      if(vf&&vf>=primDia&&vf<=ultDia&&c.status_codigo!=='10')churnMrr+=v;
+    });
+    mrrMesFim.push(mrr);novoMes.push(novoMrr);churnMes.push(churnMrr);
+  });
+  // NRR = MRR fim / MRR início do período (primeiro mês)
+  const mrrInicio=mrrMesFim[0]||0;
+  const mrrFimPeriodo=mrrMesFim[mrrMesFim.length-1]||0;
+  const nrrTotal=mrrInicio>0?mrrFimPeriodo/mrrInicio*100:0;
+  const churnTotal=churnMes.reduce((s,v)=>s+v,0);
+  const novoTotal=novoMes.reduce((s,v)=>s+v,0);
+  const avgMrr=mrrMesFim.reduce((s,v)=>s+v,0)/mrrMesFim.length;
+  const churnRateMedio=avgMrr>0?(churnTotal/mrrMesFim.length)/avgMrr*100:0;
+  // KPIs
+  if(kpiEl){
+    kpiEl.innerHTML=
+      '<div class="kpi-card"><div class="kpi-label">MRR (há 12m)</div><div class="kpi-value blue">'+fmt(mrrInicio)+'</div><div class="kpi-sub">Base inicial do período</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">MRR (hoje)</div><div class="kpi-value green">'+fmt(mrrFimPeriodo)+'</div><div class="kpi-sub">Δ '+fmt(mrrFimPeriodo-mrrInicio)+' em 12m</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">NRR 12m</div><div class="kpi-value '+(nrrTotal>=100?'green':nrrTotal>=85?'yellow':'red')+'">'+nrrTotal.toFixed(0)+'%</div><div class="kpi-sub">Net Revenue Retention</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Churn médio mensal</div><div class="kpi-value '+(churnRateMedio<2?'green':churnRateMedio<5?'yellow':'red')+'">'+churnRateMedio.toFixed(1)+'%</div><div class="kpi-sub">Novos 12m: '+fmt(novoTotal)+' · Churn: '+fmt(churnTotal)+'</div></div>';
+  }
+  // Chart
+  const labels=meses.map(m=>{const[y,mo]=m.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mo-1]+'/'+y.slice(2)});
+  charts.mrrBridge=new Chart(document.getElementById('chartMrrBridge'),{data:{
+    labels,datasets:[
+      {type:'bar',label:'Novos',data:novoMes,backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,yAxisID:'y2',order:2,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>'+'+fmtK(v)}},
+      {type:'bar',label:'Churn',data:churnMes.map(v=>-v),backgroundColor:'#FF6B6Baa',borderColor:'#FF6B6B',borderWidth:1,yAxisID:'y2',order:2,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]<0,color:'#FF6B6B',font:{size:9,weight:600},anchor:'start',align:'bottom',formatter:v=>fmtK(v)}},
+      {type:'line',label:'MRR Fim do Mês',data:mrrMesFim,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:false,tension:.25,pointRadius:4,pointBackgroundColor:'#4A90FF',borderWidth:2.5,yAxisID:'y',order:1,
+        datalabels:{display:ctx=>ctx.dataIndex===0||ctx.dataIndex===ctx.dataset.data.length-1,color:'#4A90FF',font:{size:10,weight:700},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:24}},
+    scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+      y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
+      y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta do mês (R$)',color:'#94a3b8'}}},
     plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
 }
 
