@@ -824,6 +824,38 @@ let _recMesMode='caixa';
 let _periodoTipo='personalizado';
 let _geoBrasilCache=null;
 let _municipiosBRCache=null;
+let _allTimeDreCache=null;
+
+function computeAllTimeDre(){
+  if(_allTimeDreCache)return _allTimeDreCache;
+  const d={};
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.status==='ATRASADO')return;
+    const m=toYM(l.data_vencimento||l.data);if(!m)return;
+    if(!d[m])d[m]={rb:0,das:0,cmv:0,com:0,pes:0,adm:0,fin:0};
+    const cat=l.categoria||'';
+    const g=getGrupo(cat);
+    if(l.tipo==='entrada'&&cat.startsWith('1.01.'))d[m].rb+=l.valor;
+    else if(l.tipo==='saida'){
+      if(cat==='2.06.99')d[m].das+=l.valor;
+      else if(g==='2.01')d[m].cmv+=l.valor;
+      else if(g==='2.02')d[m].com+=l.valor;
+      else if(g==='2.03')d[m].pes+=l.valor;
+      else if(g==='2.04')d[m].adm+=l.valor;
+      else if(g==='2.05')d[m].fin+=l.valor;
+    }
+  });
+  Object.keys(d).forEach(m=>{
+    const r=d[m];
+    r.rl=r.rb-r.das;
+    r.mb=r.rl-r.cmv;
+    r.sga=r.com+r.pes+r.adm;
+    r.ebitda=r.mb-r.sga;
+    r.ll=r.ebitda-r.fin;
+  });
+  _allTimeDreCache=d;
+  return d;
+}
 
 async function loadBrasilGeoJson(){
   if(_geoBrasilCache)return _geoBrasilCache;
@@ -1784,13 +1816,19 @@ function renderFinanceiro(d){
         y:{ticks:{color:'#94a3b8',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,.04)'}}},
       plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
 
-  // ---- Resultado Mensal ----
+  // ---- Resultado Mensal + YoY ----
   if(charts.finRes){charts.finRes.destroy();delete charts.finRes}
   const resultados=meses.map(m=>dre.lucroLiquido[m]);
-  charts.finRes=new Chart(document.getElementById('chartFinResultado'),{type:'bar',
+  // YoY: recomputar DRE all-time cacheado e pegar LL do mesmo mês ano anterior
+  const allTimeDre=computeAllTimeDre();
+  const resultadosYoY=meses.map(m=>{const prev=allTimeDre[getYoYMonth(m)];return prev?prev.ll:null});
+  charts.finRes=new Chart(document.getElementById('chartFinResultado'),{
     data:{labels:meses.map(mesNome),
-      datasets:[{data:resultados,backgroundColor:resultados.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:resultados.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1,
-        datalabels:{display:true,color:'#e2e8f0',font:{size:9,weight:500},anchor:'end',align:'top',formatter:v=>fmtK(v)}}]},
+      datasets:[
+        {type:'bar',data:resultados,backgroundColor:resultados.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:resultados.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1,
+          datalabels:{display:true,color:'#e2e8f0',font:{size:9,weight:500},anchor:'end',align:'top',formatter:v=>fmtK(v)}},
+        {type:'line',label:'LL Ano Ant.',data:resultadosYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+      ]},
     options:cOpts('currency')});
 
   // ---- Receita Bruta vs Custo Direto vs SG&A (stacked) + YoY Receita ----
