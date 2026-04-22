@@ -385,6 +385,18 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card">
+          <h3>Base Histórica — Novos vs Saídas (12m)</h3>
+          <div class="chart-container" style="height:280px"><canvas id="chartCtrHistorico"></canvas></div>
+          <p class="chart-note">Contratos iniciados vs terminados por mês nos últimos 12 meses. Saldo líquido = crescimento da base.</p>
+        </div>
+        <div class="chart-card">
+          <h3>Distribuição de Ticket (MRR)</h3>
+          <div class="chart-container" style="height:280px"><canvas id="chartCtrTicket"></canvas></div>
+          <p class="chart-note">Histograma de valor mensal dos contratos ativos. Concentração = homogeneidade de pricing.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card">
           <h3>Pipeline de Onboarding</h3>
           <div id="onboardingLista" class="proj-table" style="max-height:360px;overflow-y:auto"></div>
           <p class="chart-note">Contratos ativos aguardando início da vigência — ainda sem faturamento.</p>
@@ -1740,6 +1752,69 @@ function renderMrrProjChart(proj){
     plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
 }
 
+function renderCtrHistorico(lista){
+  if(charts.ctrHist){charts.ctrHist.destroy();delete charts.ctrHist}
+  if(!lista||!lista.length)return;
+  const hoje=new Date();
+  // Últimos 12 meses (não incluir mês corrente pra evitar viés parcial)
+  const meses=[];
+  for(let i=12;i>=1;i--){
+    const dt=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    meses.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'));
+  }
+  const novos={},saem={},mrrNovos={},mrrSaem={};
+  meses.forEach(m=>{novos[m]=0;saem[m]=0;mrrNovos[m]=0;mrrSaem[m]=0});
+  lista.forEach(c=>{
+    const vi=c.vigencia_inicio_iso;
+    const vf=c.vigencia_fim_iso;
+    const v=c.valor_mensal||0;
+    if(vi){const m=vi.substring(0,7);if(m in novos){novos[m]+=1;mrrNovos[m]+=v}}
+    if(vf&&c.status_codigo!=='10'){const m=vf.substring(0,7);if(m in saem){saem[m]+=1;mrrSaem[m]+=v}}
+  });
+  const labels=meses.map(m=>{const[y,mo]=m.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mo-1]+'/'+y.slice(2)});
+  charts.ctrHist=new Chart(document.getElementById('chartCtrHistorico'),{type:'bar',
+    data:{labels,datasets:[
+      {label:'Novos',data:meses.map(m=>novos[m]),backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,borderRadius:4,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#3DDC97',font:{size:10,weight:600},anchor:'end',align:'top',formatter:v=>'+'+v}},
+      {label:'Saídas',data:meses.map(m=>-saem[m]),backgroundColor:'#FF6B6Baa',borderColor:'#FF6B6B',borderWidth:1,borderRadius:4,
+        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]<0,color:'#FF6B6B',font:{size:10,weight:600},anchor:'start',align:'bottom',formatter:v=>v}}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:20,bottom:10}},
+      scales:{x:{stacked:false,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#94a3b8',callback:v=>Math.abs(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'Contratos',color:'#94a3b8'}}},
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>{const idx=ctx.dataIndex;const m=meses[idx];if(ctx.dataset.label==='Novos')return 'Novos: '+novos[m]+' contratos · '+fmt(mrrNovos[m]);return 'Saídas: '+saem[m]+' contratos · '+fmt(mrrSaem[m])}}}}}});
+}
+
+function renderCtrTicket(lista){
+  if(charts.ctrTicket){charts.ctrTicket.destroy();delete charts.ctrTicket}
+  if(!lista||!lista.length)return;
+  const ativos=lista.filter(c=>c.status_codigo==='10'&&c.valor_mensal>0);
+  const buckets=[
+    {label:'< R$ 100',min:0,max:100,count:0},
+    {label:'R$ 100-200',min:100,max:200,count:0},
+    {label:'R$ 200-250',min:200,max:250,count:0},
+    {label:'R$ 250-300',min:250,max:300,count:0},
+    {label:'R$ 300-400',min:300,max:400,count:0},
+    {label:'R$ 400-500',min:400,max:500,count:0},
+    {label:'≥ R$ 500',min:500,max:Infinity,count:0}
+  ];
+  ativos.forEach(c=>{
+    const v=c.valor_mensal;
+    for(const b of buckets){if(v>=b.min&&v<b.max){b.count+=1;break}}
+  });
+  const total=ativos.length;
+  const cores=['#FF6B6B','#FFB547','#4A90FF','#3DDC97','#2DD4BF','#A78BFA','#FB923C'];
+  charts.ctrTicket=new Chart(document.getElementById('chartCtrTicket'),{type:'bar',
+    data:{labels:buckets.map(b=>b.label),datasets:[{data:buckets.map(b=>b.count),backgroundColor:cores.map(c=>c+'aa'),borderColor:cores,borderWidth:1,borderRadius:4,
+      datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',offset:2,
+        formatter:(v,ctx)=>v+' ('+(total>0?(v/total*100).toFixed(0):0)+'%)'}}]},
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+      scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},
+        y:{ticks:{color:'#94a3b8',stepSize:20},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'# Contratos',color:'#94a3b8'}}},
+      plugins:{legend:{display:false}}}});
+}
+
 function renderOnboardingTable(onboarding,mrrPipeline,esc){
   const el=document.getElementById('onboardingLista');
   if(!onboarding.length){el.innerHTML='<p style="color:var(--muted);padding:16px">Nenhum contrato em onboarding.</p>';return}
@@ -1783,6 +1858,8 @@ function renderContratos(){
       '<div class="kpi-card"><div class="kpi-label">MRR em Risco (12m)</div><div class="kpi-value" style="color:'+(mrrTerm>0?'#FFB547':'#3DDC97')+'">'+fmt(mrrTerm)+'</div><div class="kpi-sub">'+terminando.length+' contratos terminam em até 12m</div></div>';
     document.getElementById('kpi-contratos').innerHTML=kpiHtml;
     renderMrrProjChart(proj);
+    renderCtrHistorico(ctr.lista||[]);
+    renderCtrTicket(ctr.lista||[]);
     renderOnboardingTable(onboarding,mrrPipeline,_esc);
     renderTerminandoTable(terminando,mrrTerm,_esc);
 
