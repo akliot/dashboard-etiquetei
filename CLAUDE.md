@@ -225,8 +225,11 @@ cidade = re.sub(r"\s*\([A-Z]{2}\)\s*$", "", cidade_raw).strip() or None
 ```
 Também puxar `cidade_ibge` (código IBGE do município) — útil para choropleth futuro.
 
-### Status 90 e 99 de contratos
-17 contratos com status 90 (15) ou 99 (2) têm `vigencia_fim = 2028-12-31` default. Significado exato não está documentado — pode ser aditivos ou encerrados. Revisar caso-a-caso antes de contar como churn.
+### Status 90 e 99 de contratos — contratos sem vigência fixa
+17 contratos com status 90/99 têm `vigencia_fim = 2028-12-31`. Isso é **placeholder default do cadastro** do Omie quando o contrato não tem data fim definida. NÃO são churns reais.
+- Não contar como churn em projeções < 2 anos (não afeta nada)
+- Em projeções longas (>2 anos), filtrar `vigencia_fim != '2028-12-31'` ao calcular churn
+- Status 90 = sem vigência fixa (ativo indefinido); Status 99 = similar
 
 ### DAS é imposto operacional (Simples)
 Categoria `2.06.99` NO DRE substitui IRPJ/CSLL/ISS/COFINS. Não tem `2.08` (IRPJ separado) para Etiquetei.
