@@ -799,22 +799,30 @@ async function loadBrasilGeoJson(){
 }
 
 async function renderChoroplethBR(porEstado){
+  const canvas=document.getElementById('chartGeoMap');
+  if(!canvas)return;
   if(charts.geoMap){charts.geoMap.destroy();delete charts.geoMap}
+  // Verifica se chartjs-chart-geo carregou e registra controllers (por segurança)
+  if(typeof ChartGeo!=='undefined'&&typeof Chart!=='undefined'){
+    try{Chart.register(ChartGeo.ChoroplethController,ChartGeo.ProjectionScale,ChartGeo.ColorScale,ChartGeo.GeoFeature)}catch(e){}
+  }
   const geo=await loadBrasilGeoJson();
-  if(!geo)return;
+  if(!geo){canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Não foi possível carregar o GeoJSON do Brasil.</p>';return}
   const features=geo.features;
   const data=features.map(f=>({feature:f,value:porEstado[f.properties.sigla]?.receita||0}));
-  charts.geoMap=new Chart(document.getElementById('chartGeoMap'),{type:'choropleth',
-    data:{labels:features.map(f=>f.properties.name),datasets:[{label:'Receita',outline:features,data,borderColor:'rgba(255,255,255,.15)',borderWidth:.5}]},
-    options:{responsive:true,maintainAspectRatio:false,showOutline:true,showGraticule:false,
-      plugins:{legend:{display:false},
-        datalabels:{display:false},
-        tooltip:{callbacks:{label:ctx=>{const f=features[ctx.dataIndex];const uf=f.properties.sigla;const d=porEstado[uf]||{receita:0,clientes:0};const ticket=d.clientes>0?fmt(d.receita/d.clientes):'—';return[f.properties.name+' ('+uf+')','Receita: '+fmt(d.receita),'Clientes: '+d.clientes,'Ticket médio: '+ticket]}}}},
-      scales:{xy:{axis:'x',projection:'mercator'},
-        color:{axis:'x',quantize:6,
-          interpolate:'blues',
-          missing:'rgba(255,255,255,.04)',
-          legend:{position:'bottom-right',align:'bottom',length:150,width:8}}}}});
+  try{
+    charts.geoMap=new Chart(canvas,{type:'choropleth',
+      data:{labels:features.map(f=>f.properties.name),datasets:[{label:'Receita',outline:features,data,borderColor:'rgba(255,255,255,.15)',borderWidth:.5}]},
+      options:{responsive:true,maintainAspectRatio:false,showOutline:true,showGraticule:false,
+        plugins:{legend:{display:false},
+          datalabels:{display:false},
+          tooltip:{callbacks:{label:ctx=>{const f=features[ctx.dataIndex];const uf=f.properties.sigla;const d=porEstado[uf]||{receita:0,clientes:0};const ticket=d.clientes>0?fmt(d.receita/d.clientes):'—';return[f.properties.name+' ('+uf+')','Receita: '+fmt(d.receita),'Clientes: '+d.clientes,'Ticket médio: '+ticket]}}}},
+        scales:{projection:{axis:'x',projection:'mercator'},
+          color:{axis:'x',quantize:5,
+            interpolate:t=>'rgba(74,144,255,'+Math.max(0.08,t).toFixed(2)+')',
+            missing:'rgba(255,255,255,.04)',
+            legend:{position:'bottom-right',align:'bottom',length:140,width:8}}}}});
+  }catch(e){console.error('renderChoroplethBR error',e);canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Erro ao renderizar o mapa: '+String(e.message||e)+'</p>'}
 }
 function setEbitdaMode(mode,el){_ebitdaMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
 function setRecMesMode(mode,el){_recMesMode=mode;if(el){el.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));el.classList.add('active')}renderAll()}
