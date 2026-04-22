@@ -358,6 +358,19 @@ tr:hover td{background:rgba(74,144,255,.04)}
     <!-- GEOGRAFIA -->
     <div class="page" id="page-projetos">
 
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+        <label style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Linha de Receita:</label>
+        <select id="geoLinhaFilter" onchange="renderAll()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;min-width:200px">
+          <option value="">Todas as linhas SaaS</option>
+          <option value="1.01.02">Mensalidade</option>
+          <option value="1.01.03">Setup</option>
+          <option value="1.01.99">Etiquetas</option>
+          <option value="1.01.98">Locação</option>
+          <option value="1.01.01">Comissionamento</option>
+        </select>
+        <span style="font-size:11px;color:var(--muted)">Filtra toda a aba — KPIs, mapa, tiles, tabelas</span>
+      </div>
+
       <div class="kpi-row" id="kpi-projetos"></div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
@@ -2599,11 +2612,14 @@ function filtrarCobranca(){
 // ============ PROJETOS ============
 function renderProjetos(dc){
   // Aggregate receita operacional por cliente no período, joinando com estado/cidade
+  // Filtro de linha de receita (Mensalidade, Setup, etc.)
+  const linhaFiltro=document.getElementById('geoLinhaFilter')?.value||'';
   const estadoMap=(dadosOriginal.clientes||{}).estado_por_id||{};
   const cidadeMap=(dadosOriginal.clientes||{}).cidade_por_id||{};
   const porCliente={};
   dadosFiltrados.lancamentos.forEach(l=>{
     if(!isRecOp(l))return;
+    if(linhaFiltro&&l.categoria!==linhaFiltro)return;
     const cid=l.cliente_id!=null?String(l.cliente_id):null;
     if(!cid)return;
     if(!porCliente[cid])porCliente[cid]={receita:0};
