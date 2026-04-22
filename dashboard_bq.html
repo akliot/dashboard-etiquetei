@@ -381,6 +381,13 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
+          <h3>Mapa de Cidades — Receita por Município <span class="regime-badge caixa">Caixa</span></h3>
+          <div style="height:560px;position:relative"><canvas id="chartGeoBubble"></canvas></div>
+          <p class="chart-note">Bubble map: tamanho do ponto = receita no período. Cada município com código IBGE. Hover mostra valor + clientes. Cidades sem cadastro IBGE não aparecem.</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
           <h3>Heatmap por Região <span class="regime-badge caixa">Caixa</span></h3>
           <div id="geoMap" style="padding:8px 0"></div>
           <p class="chart-note">Visão compacta em tiles — estados agrupados por região, cor proporcional à receita (escala log).</p>
@@ -803,6 +810,7 @@ let _ebitdaMode='real';
 let _recMesMode='caixa';
 let _periodoTipo='personalizado';
 let _geoBrasilCache=null;
+let _municipiosBRCache=null;
 
 async function loadBrasilGeoJson(){
   if(_geoBrasilCache)return _geoBrasilCache;
@@ -813,13 +821,65 @@ async function loadBrasilGeoJson(){
   }catch(e){console.error('Falha ao carregar GeoJSON Brasil',e);return null}
 }
 
+async function loadMunicipiosBR(){
+  if(_municipiosBRCache)return _municipiosBRCache;
+  try{
+    const r=await fetch('https://cdn.jsdelivr.net/gh/kelvins/municipios-brasileiros@main/json/municipios.json');
+    const txt=await r.text();
+    const clean=txt.charCodeAt(0)===0xFEFF?txt.slice(1):txt;
+    const arr=JSON.parse(clean);
+    // Indexar por código IBGE (string) pra lookup rápido
+    _municipiosBRCache={};
+    arr.forEach(m=>{_municipiosBRCache[String(m.codigo_ibge)]=m});
+    return _municipiosBRCache;
+  }catch(e){console.error('Falha ao carregar municípios BR',e);return null}
+}
+
+async function renderBubbleMapBR(porIbge){
+  const canvas=document.getElementById('chartGeoBubble');
+  if(!canvas)return;
+  if(charts.geoBubble){charts.geoBubble.destroy();delete charts.geoBubble}
+  const [geo,municipios]=await Promise.all([loadBrasilGeoJson(),loadMunicipiosBR()]);
+  if(!geo||!municipios){canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Não foi possível carregar os dados geográficos.</p>';return}
+  // Build bubbles from porIbge (IBGE code → {receita, clientes})
+  const valores=Object.values(porIbge).map(v=>v.receita).filter(v=>v>0);
+  const maxRec=valores.length?Math.max(...valores):0;
+  const bubbles=[];
+  Object.entries(porIbge).forEach(([ibge,d])=>{
+    const mun=municipios[ibge];
+    if(!mun||!d.receita||d.receita<=0)return;
+    bubbles.push({
+      longitude:mun.longitude,
+      latitude:mun.latitude,
+      value:d.receita,
+      nome:mun.nome,
+      uf_id:mun.codigo_uf,
+      clientes:d.clientes
+    });
+  });
+  // Size scale: sqrt pra ficar proporcional à área
+  const minR=4,maxR=40;
+  try{
+    charts.geoBubble=new Chart(canvas,{type:'bubbleMap',
+      data:{datasets:[{label:'Cidades',outline:geo.features,borderColor:'rgba(255,255,255,.1)',
+        showOutline:true,
+        backgroundColor:'rgba(74,144,255,.55)',
+        data:bubbles}]},
+      options:{responsive:true,maintainAspectRatio:false,showOutline:true,showGraticule:false,
+        plugins:{legend:{display:false},datalabels:{display:false},
+          tooltip:{callbacks:{label:ctx=>{const b=bubbles[ctx.dataIndex];const ticket=b.clientes>0?fmt(b.value/b.clientes):'—';return[b.nome,'Receita: '+fmt(b.value),'Clientes: '+b.clientes,'Ticket médio: '+ticket]}}}},
+        scales:{projection:{axis:'x',projection:'mercator'},
+          r:{axis:'r',type:'sizeLogarithmic',range:[minR,maxR],display:false}}}});
+  }catch(e){console.error('renderBubbleMapBR error',e);canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Erro ao renderizar bubble map: '+String(e.message||e)+'</p>'}
+}
+
 async function renderChoroplethBR(porEstado){
   const canvas=document.getElementById('chartGeoMap');
   if(!canvas)return;
   if(charts.geoMap){charts.geoMap.destroy();delete charts.geoMap}
   // Verifica se chartjs-chart-geo carregou e registra controllers (por segurança)
   if(typeof ChartGeo!=='undefined'&&typeof Chart!=='undefined'){
-    try{Chart.register(ChartGeo.ChoroplethController,ChartGeo.ProjectionScale,ChartGeo.ColorScale,ChartGeo.GeoFeature)}catch(e){}
+    try{Chart.register(ChartGeo.ChoroplethController,ChartGeo.BubbleMapController,ChartGeo.ProjectionScale,ChartGeo.ColorScale,ChartGeo.SizeScale,ChartGeo.GeoFeature)}catch(e){}
   }
   const geo=await loadBrasilGeoJson();
   if(!geo){canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Não foi possível carregar o GeoJSON do Brasil.</p>';return}
@@ -2613,11 +2673,12 @@ function filtrarCobranca(){
 
 // ============ PROJETOS ============
 function renderProjetos(dc){
-  // Aggregate receita operacional por cliente no período, joinando com estado/cidade
+  // Aggregate receita operacional por cliente no período, joinando com estado/cidade/IBGE
   // Filtro de linha de receita (Mensalidade, Setup, etc.)
   const linhaFiltro=document.getElementById('geoLinhaFilter')?.value||'';
   const estadoMap=(dadosOriginal.clientes||{}).estado_por_id||{};
   const cidadeMap=(dadosOriginal.clientes||{}).cidade_por_id||{};
+  const ibgeMap=(dadosOriginal.clientes||{}).ibge_por_id||{};
   const porCliente={};
   dadosFiltrados.lancamentos.forEach(l=>{
     if(!isRecOp(l))return;
@@ -2629,9 +2690,11 @@ function renderProjetos(dc){
   });
   const porEstado={};
   const porCidade={};
+  const porIbge={};
   Object.keys(porCliente).forEach(cid=>{
     const uf=estadoMap[cid]||'—';
     const cidade=cidadeMap[cid]||'—';
+    const ibge=ibgeMap[cid];
     if(!porEstado[uf])porEstado[uf]={receita:0,clientes:0};
     porEstado[uf].receita+=porCliente[cid].receita;
     porEstado[uf].clientes+=1;
@@ -2639,6 +2702,11 @@ function renderProjetos(dc){
     if(!porCidade[chaveCidade])porCidade[chaveCidade]={cidade,uf,receita:0,clientes:0};
     porCidade[chaveCidade].receita+=porCliente[cid].receita;
     porCidade[chaveCidade].clientes+=1;
+    if(ibge){
+      if(!porIbge[ibge])porIbge[ibge]={receita:0,clientes:0};
+      porIbge[ibge].receita+=porCliente[cid].receita;
+      porIbge[ibge].clientes+=1;
+    }
   });
   const estados=Object.entries(porEstado).sort((a,b)=>b[1].receita-a[1].receita);
   const totalRec=estados.reduce((s,e)=>s+e[1].receita,0);
@@ -2658,6 +2726,8 @@ function renderProjetos(dc){
 
   // ---- Choropleth SVG real do Brasil ----
   renderChoroplethBR(porEstado);
+  // ---- Bubble Map por município ----
+  renderBubbleMapBR(porIbge);
 
   // ---- Heatmap "mapa" — tiles por UF agrupados por região ----
   const REGIOES=[

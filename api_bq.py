@@ -252,9 +252,10 @@ def build_json() -> dict:
     # Top 15 estados
     top_estados = dict(sorted(por_estado.items(), key=lambda x: x[1], reverse=True)[:15])
 
-    # Mapas compactos cliente_id → estado/cidade para join no frontend
+    # Mapas compactos cliente_id → estado/cidade/ibge para join no frontend
     cli_estado_map = {str(r["id"]): r.get("estado") for r in cli_rows if r.get("estado")}
     cli_cidade_map = {str(r["id"]): r.get("cidade") for r in cli_rows if r.get("cidade")}
+    cli_ibge_map = {str(r["id"]): r.get("cidade_ibge") for r in cli_rows if r.get("cidade_ibge")}
     clientes = {
         "total_clientes": len(cli_rows),
         "ativos": ativos,
@@ -265,6 +266,7 @@ def build_json() -> dict:
         "por_mes_cadastro": dict(por_mes_cadastro),
         "estado_por_id": cli_estado_map,
         "cidade_por_id": cli_cidade_map,
+        "ibge_por_id": cli_ibge_map,
     }
 
     # ---- Orçamento DRE (formato esperado pelo HTML: dre[], meses_disponiveis, meses_com_real) ----
