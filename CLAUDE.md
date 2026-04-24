@@ -241,7 +241,7 @@ Categoria `2.06.99` NO DRE substitui IRPJ/CSLL/ISS/COFINS. Não tem `2.08` (IRPJ
 - **Cloud Function**: valida header `X-API-Key` via env var `DASHBOARD_API_KEY`. Sem key → 401. Se var não setada, auth passa (tolerância).
 - **Senha**: NÃO documentar senhas em plaintext neste arquivo.
 
-## Status da implementação (22/04/2026)
+## Status da implementação (24/04/2026)
 
 ### ✅ Recente (sessão 22/04)
 - **Receita Operacional padronizada** em todas as abas (globais REC_OP_EXCLUIR / DESP_OP_EXCLUIR)
@@ -255,13 +255,22 @@ Categoria `2.06.99` NO DRE substitui IRPJ/CSLL/ISS/COFINS. Não tem `2.08` (IRPJ
 - **Default YTD** ao abrir
 - **Sync expandido**: cidade (normalizada) + cidade_ibge
 
+### ✅ Incrementos pós-reformulação
+- **Geografia**: choropleth SVG real do Brasil (chartjs-chart-geo) + bubble map por município (`cidade_ibge` + lat/lon)
+- **Geografia**: filtro por linha de receita (Mensalidade/Setup/Etiquetas/Locação/Comissionamento)
+- **YoY**: linhas pontilhadas de ano anterior em gráficos prioritários (sparklines, Fluxo, Faturamento, Resultado)
+- **Receitas**: Cohort Retention table por mês de entrada dos contratos
+- **Contratos**: MRR Projetado ganhou linha de tendência baseada no pace líquido histórico de 6 meses
+- **Cobrança**: aging por faixa (0-30, 31-60, 61-90, 90+)
+- **PDF**: página de DRE estruturada no relatório executivo
+- **Correção Etiquetei**: `1.01.99` é "Venda de Etiquetas", não receita a identificar
+- **Status 90/99**: contratos sem vigência fixa/placeholder `2028-12-31`; não tratar como churn de curto prazo
+
 ### ⏳ Pendente (baixa-média prioridade)
-- Choropleth SVG real (hoje = tiles por região)
-- Bubble map por município (IBGE já disponível no cadastro)
-- YoY real (linha pontilhada do mesmo mês ano anterior)
-- Cobrança tab — ampliar (aging por faixa, curva de recuperação)
-- Cohort analysis (retenção por mês de entrada)
 - Identidade visual Etiquetei (cores ainda do Koti)
-- Revisar status 90 e 99 dos contratos
+- Completar YoY nos gráficos mensais que ainda não têm linha de ano anterior
+- Cobrança tab — curva de recuperação
+- Quick Ratio ((novos + expansão) / (churn + contração))
+- Validar 2 contratos "saindo em Abril" (R$ 554): churn real ou vigência antiga
+- Validar exclusões de faturamento (`1.04.04-06`, `1.04.95`, `1.04.99` se existirem)
 - Adaptar `test_pipeline.py` e `test_api.py`
-- Export PDF estruturado da aba Resultado
