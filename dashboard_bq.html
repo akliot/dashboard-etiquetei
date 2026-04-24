@@ -2215,13 +2215,25 @@ function renderMrrBridge(lista){
   const novoTotal=novoMes.reduce((s,v)=>s+v,0);
   const avgMrr=mrrMesFim.reduce((s,v)=>s+v,0)/mrrMesFim.length;
   const churnRateMedio=avgMrr>0?(churnTotal/mrrMesFim.length)/avgMrr*100:0;
+  // Quick Ratio v1 = Novos / Churn (12m). Expansão/contração ainda não separadas.
+  // Usa novoTotal/churnTotal do MRR Bridge; 90/99 com vigencia_fim=2028-12-31 já
+  // ficam fora por construção (nunca caem na janela de 12m).
+  let qrValor,qrCor;
+  if(churnTotal===0&&novoTotal===0){qrValor='—';qrCor='blue'}
+  else if(churnTotal===0){qrValor='∞';qrCor='green'}
+  else{
+    const qr=novoTotal/churnTotal;
+    qrValor=qr.toFixed(1).replace('.',',')+'x';
+    qrCor=qr<1?'red':qr<4?'yellow':'green';
+  }
   // KPIs
   if(kpiEl){
     kpiEl.innerHTML=
       '<div class="kpi-card"><div class="kpi-label">MRR (há 12m)</div><div class="kpi-value blue">'+fmt(mrrInicio)+'</div><div class="kpi-sub">Base inicial do período</div></div>'+
       '<div class="kpi-card"><div class="kpi-label">MRR (hoje)</div><div class="kpi-value green">'+fmt(mrrFimPeriodo)+'</div><div class="kpi-sub">Δ '+fmt(mrrFimPeriodo-mrrInicio)+' em 12m</div></div>'+
       '<div class="kpi-card"><div class="kpi-label">NRR 12m</div><div class="kpi-value '+(nrrTotal>=100?'green':nrrTotal>=85?'yellow':'red')+'">'+nrrTotal.toFixed(0)+'%</div><div class="kpi-sub">Net Revenue Retention</div></div>'+
-      '<div class="kpi-card"><div class="kpi-label">Churn médio mensal</div><div class="kpi-value '+(churnRateMedio<2?'green':churnRateMedio<5?'yellow':'red')+'">'+churnRateMedio.toFixed(1)+'%</div><div class="kpi-sub">Novos 12m: '+fmt(novoTotal)+' · Churn: '+fmt(churnTotal)+'</div></div>';
+      '<div class="kpi-card"><div class="kpi-label">Churn médio mensal</div><div class="kpi-value '+(churnRateMedio<2?'green':churnRateMedio<5?'yellow':'red')+'">'+churnRateMedio.toFixed(1)+'%</div><div class="kpi-sub">Novos 12m: '+fmt(novoTotal)+' · Churn: '+fmt(churnTotal)+'</div></div>'+
+      '<div class="kpi-card" title="Quick Ratio v1 baseado em contratos; expansão/contração ainda não separadas. <1 encolhendo · 1-4 saudável · ≥4 alta velocidade."><div class="kpi-label">Quick Ratio</div><div class="kpi-value '+qrCor+'">'+qrValor+'</div><div class="kpi-sub">Novos / Churn — 12m</div></div>';
   }
   // Chart
   const labels=meses.map(m=>{const[y,mo]=m.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][mo-1]+'/'+y.slice(2)});
