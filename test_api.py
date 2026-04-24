@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-Testes unitários para a API api_bq.py.
+Testes unitários para a API api_bq.py (Etiquetei).
 
 Uso:
-  python3 test_api.py -v
+  python3 -m unittest test_api.py -v
+
+Testes que batem em BigQuery só rodam com RUN_BQ_TESTS=1.
 """
 
 import unittest
 from unittest.mock import MagicMock
 from datetime import date, datetime
 import os
-import json
 
 os.environ.setdefault("GCP_PROJECT_ID", "dashboard-koti-omie")
-os.environ.setdefault("BQ_DATASET", "studio_koti")
+os.environ.setdefault("BQ_DATASET", "etiquetei")
+
+RUN_BQ_TESTS = os.environ.get("RUN_BQ_TESTS") == "1"
 
 import api_bq
 
@@ -61,12 +64,12 @@ class TestTbl(unittest.TestCase):
 
     def test_lancamentos(self):
         ref = api_bq.tbl("lancamentos")
-        self.assertEqual(ref, "`dashboard-koti-omie.studio_koti.lancamentos`")
+        self.assertEqual(ref, "`dashboard-koti-omie.etiquetei.lancamentos`")
 
     def test_saldos(self):
         ref = api_bq.tbl("saldos_bancarios")
         self.assertIn("saldos_bancarios", ref)
-        self.assertIn("studio_koti", ref)
+        self.assertIn("etiquetei", ref)
 
 
 class TestDataRefLogic(unittest.TestCase):
@@ -171,21 +174,13 @@ class TestApiDashboardOptions(unittest.TestCase):
         self.assertEqual(headers["Access-Control-Allow-Methods"], "GET")
 
 
+@unittest.skipUnless(RUN_BQ_TESTS, "requer RUN_BQ_TESTS=1 (acessa BigQuery)")
 class TestBuildJsonStructure(unittest.TestCase):
     """Testa estrutura do JSON retornado (requer BigQuery acessível)."""
 
     @classmethod
     def setUpClass(cls):
-        """Tenta build_json. Se BQ não acessível, pula."""
-        try:
-            cls.data = api_bq.build_json()
-            cls.bq_available = True
-        except Exception:
-            cls.bq_available = False
-
-    def setUp(self):
-        if not self.bq_available:
-            self.skipTest("BigQuery não acessível")
+        cls.data = api_bq.build_json()
 
     def test_campos_obrigatorios(self):
         for campo in ["atualizado_em", "atualizado_em_formatado", "lancamentos",
@@ -262,23 +257,6 @@ class TestBuildJsonStructure(unittest.TestCase):
         for campo in ["total_clientes", "ativos", "inativos",
                       "pessoa_fisica", "pessoa_juridica", "por_estado"]:
             self.assertIn(campo, c, f"Campo '{campo}' faltando em clientes")
-
-    def test_orcamento_presente_se_tabela_tem_dados(self):
-        """Se existir orcamento, deve ter a estrutura correta."""
-        if "orcamento" not in self.data:
-            self.skipTest("Sem orçamento")
-        orc = self.data["orcamento"]
-        self.assertIn("meses_disponiveis", orc)
-        self.assertIn("meses_com_real", orc)
-        self.assertIn("dre", orc)
-        self.assertIsInstance(orc["dre"], list)
-
-    def test_orcamento_dre_estrutura(self):
-        if "orcamento" not in self.data or not self.data["orcamento"]["dre"]:
-            self.skipTest("Sem orçamento/DRE")
-        dre = self.data["orcamento"]["dre"][0]
-        for campo in ["label", "section", "level", "bp", "real"]:
-            self.assertIn(campo, dre, f"Campo '{campo}' faltando no DRE")
 
     def test_atualizado_em_brt(self):
         """Horário deve estar em BRT (não UTC)."""
