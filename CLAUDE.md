@@ -154,9 +154,9 @@ Concluído até 24/04/2026:
 - Reformulação CFO-grade: DRE, Geografia, MRR Bridge, Projeção 90d, default YTD
 - Pós-reformulação: choropleth, bubble map, YoY prioritário, cohort retention, aging, PDF com DRE, tendência de MRR
 - Correções críticas: `1.01.99` e status `90/99`
+- Testes: `test_api.py` e `test_pipeline.py` adaptados para Etiquetei; offline sem BQ/rede, online via `RUN_BQ_TESTS=1`; `83 tests`, `68 pass`, `15 skipped`
 
 Pendências:
-- Adaptar `test_pipeline.py` e `test_api.py` para Etiquetei e separar offline/BigQuery
 - Identidade visual Etiquetei
 - Completar YoY nos gráficos mensais restantes
 - Cobrança: curva de recuperação
