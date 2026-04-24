@@ -537,9 +537,22 @@ const parseDate=d=>{try{const[dd,mm,yy]=d.split('/');return new Date(yy,mm-1,dd)
 const toYM=d=>{try{const[dd,mm,yy]=d.split('/');return `${yy}-${mm}`}catch{return null}};
 
 // Categorias excluídas da "Receita Operacional" (cat completa, 3 níveis):
-//  1.02.02 rendimentos · 1.03.* devoluções · 1.04.01-03 recebimento indevido/FD/empréstimos
+// Categorias excluídas da receita operacional — todas não-operacionais por natureza:
+//   1.02.02 Rendimentos de Aplicações (financeira)
+//   1.03.01 Devoluções de Compra de Mercadoria de Revenda
+//   1.03.02 Devoluções de Compra de Material de Consumo
+//   1.03.03 Devoluções de Compra de Matéria Prima
+//   1.03.04 Devoluções de Compra de Ativo
+//   1.03.26 Devoluções de Compra de Serviços
+//   1.04.01 Adiantamento de Clientes (não é receita reconhecida)
+//   1.04.02 Reembolso de Despesas
+//   1.04.03 Empréstimos Bancários
 // NOTA: 1.01.99 no Etiquetei é "Clientes - Venda de Etiquetas" (receita real), NÃO excluir.
 //       (No Koti, 1.01.99 é "Receita a Identificar" — convenção diferente)
+// Avaliadas em 24/04/2026 e NÃO adicionadas porque zero lançamentos no Etiquetei hoje;
+// se aparecerem no futuro, são claramente não-operacionais e devem ser incluídas aqui:
+//   1.04.04 Aumento de Capital · 1.04.05 Venda de Participações · 1.04.06 Venda de Ativos
+//   1.04.95 Prêmios de Seguros / Sinistros · 1.04.99 <Disponível>
 const REC_OP_EXCLUIR=new Set(['1.04.02','1.04.03','1.04.01','1.02.02','1.03.01','1.03.02','1.03.03','1.03.04','1.03.26']);
 // Grupos (2 níveis) excluídos da "Despesa Operacional":
 //  2.05 financeiras · 2.07 CAPEX · 2.08 IRPJ/CSLL · 2.09 devoluções · 2.10 empréstimos · 2.11 outros não-op
