@@ -1,0 +1,5 @@
+# Specs Index
+
+| N | Titulo | Data | Status |
+|---|--------|------|--------|
+| 001 | Completar YoY restante no dashboard Etiquetei | 2026-04-26 | pendente |
