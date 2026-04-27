@@ -21,13 +21,21 @@ const API_URL = window.DASHBOARD_API_URL
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-:root{--bg:#090D16;--card:#0F1420;--card-hover:#161C2E;--text:#EAF0FA;--muted:#94a3be;--accent:#4A90FF;--green:#3DDC97;--red:#FF6B6B;--yellow:#FFB547;--purple:#A78BFA;--cyan:#2DD4BF;--orange:#FB923C;--border:rgba(255,255,255,.06)}
+/* Identidade visual Etiquetei — paleta teal sobre dark com leve viés verde-azulado.
+   Cores semânticas (green/red/yellow/purple/orange/cyan) preservadas para não impactar
+   a leitura dos charts; apenas o accent de marca e as superfícies foram retonalizados. */
+:root{--bg:#0A1014;--card:#0F1719;--card-hover:#162527;--text:#E8F2F0;--muted:#8FA8A4;--accent:#14B8A6;--accent-strong:#0D9488;--green:#3DDC97;--red:#FF6B6B;--yellow:#FFB547;--purple:#A78BFA;--cyan:#22D3EE;--orange:#FB923C;--border:rgba(255,255,255,.06)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.header{background:linear-gradient(135deg,#0F1420 0%,#090D16 100%);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-.header h1{font-size:22px;font-weight:700}
+.header{background:linear-gradient(135deg,#0F1A1C 0%,#0A1014 100%);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;position:relative}
+.header::after{content:'';position:absolute;left:24px;right:24px;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent 0%,var(--accent) 30%,var(--accent) 70%,transparent 100%);opacity:.55}
+.header .brand{display:flex;align-items:center;gap:10px}
+.header .brand-mark{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--accent) 0%,var(--accent-strong) 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1px rgba(20,184,166,.25),0 4px 14px rgba(20,184,166,.18);flex-shrink:0}
+.header .brand-mark svg{display:block}
+.header h1{font-size:22px;font-weight:700;letter-spacing:-.4px}
+.header h1 .brand-dot{color:var(--accent);font-weight:700}
 .header .sync-info{font-size:13px;color:var(--muted)}
-.header .dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-right:6px;animation:pulse 2s infinite}
+.header .dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;margin-right:6px;animation:pulse 2s infinite;box-shadow:0 0 0 3px rgba(61,220,151,.12)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .filters-bar{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .filter-group select,.filter-group input[type=date],.search-input,.autocomplete-wrap input{font-family:'DM Sans',system-ui,sans-serif}
@@ -51,7 +59,7 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 .orc-timeline .tl-step{flex:1;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;z-index:2}
 .orc-timeline .tl-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:var(--bg);transition:all .15s;position:relative;z-index:3}
 .orc-timeline .tl-dot:hover{border-color:var(--accent);transform:scale(1.2)}
-.orc-timeline .tl-dot.selected{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+.orc-timeline .tl-dot.selected{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px rgba(20,184,166,.25)}
 .orc-timeline .tl-dot.in-range{background:var(--accent);border-color:var(--accent);opacity:.7}
 .orc-timeline .tl-dot.has-real{border-color:#22c55e}
 .orc-timeline .tl-dot.has-real.selected,.orc-timeline .tl-dot.has-real.in-range{background:var(--accent);border-color:var(--accent)}
@@ -65,16 +73,16 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 .btn-filter.secondary{background:var(--border)}
 .tabs{display:flex;gap:4px;padding:12px 24px 0;border-bottom:1px solid var(--border);overflow-x:auto}
 .tab{padding:8px 16px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:500;color:#94a3b8;border-bottom:2px solid transparent;transition:all .2s;background:none;border-top:none;border-left:none;border-right:none;white-space:nowrap}
-.tab:hover{color:#e2e8f0}.tab.active{color:#3b82f6;border-bottom-color:#3b82f6}
+.tab:hover{color:#e2e8f0}.tab.active{color:#14B8A6;border-bottom-color:#14B8A6}
 .content{padding:20px 24px}
 .page{display:none}.page.active{display:block}
 .chart-note{font-size:11px;color:rgba(255,255,255,.35);margin-top:8px;line-height:1.6;font-style:italic}
 .regime-badge{display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:8px;letter-spacing:.3px;opacity:.7;margin-left:6px;vertical-align:middle}
-.regime-badge.caixa{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.25)}
+.regime-badge.caixa{background:rgba(34,211,238,.12);color:#67E8F9;border:1px solid rgba(34,211,238,.22)}
 .regime-badge.competencia{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.25)}
 .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
-.kpi-card{background:#0F1420;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:22px 20px;transition:all .3s ease;position:relative;overflow:hidden}
-.kpi-card:hover{box-shadow:0 0 24px rgba(74,144,255,.06);border-color:rgba(255,255,255,.12)}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 20px;transition:all .3s ease;position:relative;overflow:hidden}
+.kpi-card:hover{box-shadow:0 0 24px rgba(20,184,166,.06);border-color:rgba(255,255,255,.12)}
 .kpi-label{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.55);margin-bottom:8px}
 .kpi-value{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700}
 .kpi-sub{font-family:'DM Sans',sans-serif;font-size:12px;color:rgba(255,255,255,.4);margin-top:4px}
@@ -87,15 +95,15 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 table{width:100%;border-collapse:collapse;font-size:13px;font-family:'DM Sans',sans-serif}
 th{text-align:left;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);border-bottom:1px solid var(--border)}
 td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.04)}
-tr:hover td{background:rgba(74,144,255,.04)}
+tr:hover td{background:rgba(20,184,166,.04)}
 .progress-bar{width:100%;height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:3px}
 .progress-fill{height:100%;border-radius:3px}
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
 .btn{padding:10px 24px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500}
 #fileInput{display:none}
 .fluxo-table{max-height:620px;overflow-y:auto}
-.fluxo-table thead{position:sticky;top:0;background:#0F1420;z-index:1}
-.cat-group{font-weight:600;background:rgba(74,144,255,.06);font-size:12px}
+.fluxo-table thead{position:sticky;top:0;background:var(--card);z-index:1}
+.cat-group{font-weight:600;background:rgba(20,184,166,.06);font-size:12px}
 .cat-group td{padding:7px 10px}
 .valor-entrada{color:var(--green)}.valor-saida{color:var(--red)}
 .saldo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
@@ -104,7 +112,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .saldo-item .nome{font-size:13px;color:rgba(255,255,255,.5)}.saldo-item .tipo{font-size:10px;color:rgba(255,255,255,.25);text-transform:uppercase}
 .saldo-item .valor{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700}
 .proj-table{max-height:500px;overflow-y:auto}
-.proj-table thead{position:sticky;top:0;background:#0F1420;z-index:1}
+.proj-table thead{position:sticky;top:0;background:var(--card);z-index:1}
 .concil-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
 .concil-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative;overflow:hidden;transition:all .3s ease}
 .concil-item.ok{border-left:4px solid var(--green)}.concil-item.warn{border-left:4px solid var(--yellow)}.concil-item.error{border-left:4px solid var(--red)}
@@ -117,12 +125,12 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .concil-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 16px;text-align:center}
 .concil-stat .num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700}.concil-stat .lbl{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
 .fin-detail-table{max-height:420px;overflow-y:auto}
-.fin-detail-table thead{position:sticky;top:0;background:#0F1420;z-index:1}
+.fin-detail-table thead{position:sticky;top:0;background:var(--card);z-index:1}
 .dre-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
 .dre-wrap th{padding:10px 10px;font-weight:600;color:rgba(255,255,255,.65);font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap}
 .dre-wrap td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;font-variant-numeric:tabular-nums}
 .dre-wrap tr.dre-sub td{color:rgba(255,255,255,.7)}
-.dre-wrap tr.dre-total td{background:rgba(74,144,255,.06);font-weight:700;border-top:1px solid rgba(74,144,255,.2);border-bottom:1px solid rgba(74,144,255,.2)}
+.dre-wrap tr.dre-total td{background:rgba(20,184,166,.06);font-weight:700;border-top:1px solid rgba(20,184,166,.2);border-bottom:1px solid rgba(20,184,166,.2)}
 .dre-wrap tr.dre-total.positivo td{background:rgba(61,220,151,.07);border-color:rgba(61,220,151,.2);color:#e2e8f0}
 .dre-wrap tr.dre-total.negativo td{background:rgba(255,107,107,.07);border-color:rgba(255,107,107,.2)}
 .dre-wrap tr.dre-final td{background:rgba(167,139,250,.08);font-weight:800;border-top:2px solid rgba(167,139,250,.4);border-bottom:2px solid rgba(167,139,250,.4);font-size:13.5px}
@@ -134,7 +142,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
 .geo-region .region-label{min-width:120px;font-size:10.5px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.8px;font-weight:600}
 .geo-region .tiles{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .geo-tile{min-width:66px;padding:10px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.08);text-align:center;transition:all .2s;position:relative}
-.geo-tile:hover{transform:translateY(-2px);border-color:rgba(74,144,255,.5);z-index:2}
+.geo-tile:hover{transform:translateY(-2px);border-color:rgba(20,184,166,.5);z-index:2}
 .geo-tile .code{font-weight:700;font-size:13px;color:rgba(255,255,255,.95)}
 .geo-tile .val{font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;font-family:'JetBrains Mono',monospace}
 .geo-tile .clientes-count{font-size:9px;color:rgba(255,255,255,.5);margin-top:1px}
@@ -148,10 +156,10 @@ tr:hover td{background:rgba(74,144,255,.04)}
 /* Visão Geral — Premium Design */
 #page-visao-geral{font-family:'DM Sans',system-ui,sans-serif}
 #page-visao-geral .vg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
-#page-visao-geral .vg-kpi{background:#0F1420;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:22px 20px;position:relative;overflow:hidden;transition:all .3s ease}
-#page-visao-geral .vg-kpi:hover{box-shadow:0 0 24px rgba(74,144,255,.08);border-color:rgba(255,255,255,.12)}
+#page-visao-geral .vg-kpi{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 20px;position:relative;overflow:hidden;transition:all .3s ease}
+#page-visao-geral .vg-kpi:hover{box-shadow:0 0 24px rgba(20,184,166,.08);border-color:rgba(255,255,255,.12)}
 #page-visao-geral .vg-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:16px 16px 0 0}
-#page-visao-geral .vg-kpi.bar-blue::before{background:#4A90FF}
+#page-visao-geral .vg-kpi.bar-blue::before{background:#14B8A6}
 #page-visao-geral .vg-kpi.bar-green::before{background:#3DDC97}
 #page-visao-geral .vg-kpi.bar-red::before{background:#FF6B6B}
 #page-visao-geral .vg-kpi.bar-cyan::before{background:#2DD4BF}
@@ -161,24 +169,26 @@ tr:hover td{background:rgba(74,144,255,.04)}
 #page-visao-geral .vg-val{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;margin-bottom:6px}
 #page-visao-geral .vg-sub{font-size:12px;color:rgba(255,255,255,.45);display:flex;align-items:center;gap:5px}
 #page-visao-geral .vg-sparks{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-#page-visao-geral .vg-spark{background:#0F1420;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:16px 18px;transition:all .3s ease}
+#page-visao-geral .vg-spark{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 18px;transition:all .3s ease}
 #page-visao-geral .vg-spark:hover{border-color:rgba(255,255,255,.12)}
 #page-visao-geral .vg-spark h4{font-size:12px;font-weight:600;color:rgba(255,255,255,.6);margin-bottom:8px}
 #page-visao-geral .vg-alerts{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
-#page-visao-geral .vg-alert{background:#0F1420;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 18px;border-left:4px solid;font-size:13px;color:rgba(255,255,255,.7);transition:all .3s ease;line-height:1.5}
+#page-visao-geral .vg-alert{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;border-left:4px solid;font-size:13px;color:rgba(255,255,255,.7);transition:all .3s ease;line-height:1.5}
 #page-visao-geral .vg-alert.a-red{border-left-color:#FF6B6B}
 #page-visao-geral .vg-alert.a-yellow{border-left-color:#FFB547}
 #page-visao-geral .vg-alert.a-green{border-left-color:#3DDC97}
-#page-visao-geral .vg-alert strong{color:#EAF0FA}
+#page-visao-geral .vg-alert strong{color:var(--text)}
 @media(max-width:768px){.header{padding:12px}.content{padding:12px}.chart-row{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(2,1fr)}.kpi-value{font-size:18px}#page-visao-geral .vg-grid,#page-visao-geral .vg-sparks{grid-template-columns:1fr 1fr}}
-#loginScreen{display:flex;justify-content:center;align-items:center;min-height:100vh;background:var(--bg)}
-#loginBox{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:40px;width:360px;text-align:center}
-#loginBox h2{font-size:20px;margin-bottom:6px}
-#loginBox p{font-size:13px;color:var(--muted);margin-bottom:24px}
-#loginBox input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:12px;text-align:center}
-#loginBox input:focus{outline:none;border-color:var(--accent)}
-#loginBox button{width:100%;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
-#loginBox button:hover{opacity:.85}
+#loginScreen{display:flex;justify-content:center;align-items:center;min-height:100vh;background:radial-gradient(ellipse at top,#0E1C1E 0%,var(--bg) 60%)}
+#loginBox{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:36px 36px 32px;width:360px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+#loginBox .login-mark{width:44px;height:44px;border-radius:11px;margin:0 auto 14px;background:linear-gradient(135deg,var(--accent) 0%,var(--accent-strong) 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1px rgba(20,184,166,.25),0 6px 22px rgba(20,184,166,.22)}
+#loginBox h2{font-size:22px;margin-bottom:4px;letter-spacing:-.4px}
+#loginBox h2 .brand-dot{color:var(--accent)}
+#loginBox p{font-size:13px;color:var(--muted);margin-bottom:24px;letter-spacing:.2px}
+#loginBox input{width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:12px;text-align:center;transition:border-color .15s,box-shadow .15s}
+#loginBox input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(20,184,166,.15)}
+#loginBox button{width:100%;padding:11px;background:var(--accent);color:#0A1014;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:all .15s}
+#loginBox button:hover{background:var(--accent-strong);box-shadow:0 4px 16px rgba(20,184,166,.25)}
 #loginError{color:var(--red);font-size:12px;margin-top:8px;display:none}
 #appMain{display:none}
 </style>
@@ -186,7 +196,10 @@ tr:hover td{background:rgba(74,144,255,.04)}
 <body>
 <div id="loginScreen">
   <div id="loginBox">
-    <h2>Etiquetei</h2>
+    <div class="login-mark" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0A1014" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.6" fill="#0A1014"/></svg>
+    </div>
+    <h2>Etiquetei<span class="brand-dot">.</span></h2>
     <p>Dashboard Financeiro</p>
     <input type="password" id="loginPass" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()">
     <button onclick="doLogin()">Entrar</button>
@@ -195,7 +208,12 @@ tr:hover td{background:rgba(74,144,255,.04)}
 </div>
 <div id="appMain">
 <div class="header">
-  <h1>Etiquetei</h1>
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A1014" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.6" fill="#0A1014"/></svg>
+    </div>
+    <h1>Etiquetei<span class="brand-dot">.</span></h1>
+  </div>
   <div class="sync-info" id="syncInfo">Aguardando dados...</div>
 </div>
 <div class="filters-bar" id="filtersBar" style="display:none">
@@ -218,7 +236,7 @@ tr:hover td{background:rgba(74,144,255,.04)}
   </div>
   <button class="btn-filter" onclick="aplicarFiltros()">Aplicar</button>
   <button class="btn-filter secondary" onclick="limparFiltros()">Limpar</button>
-  <button class="btn-filter" onclick="gerarRelatorioPDF()" style="margin-left:auto;background:transparent;border:1px solid #334155;color:#94a3b8;transition:all .2s" onmouseover="this.style.borderColor='#4A90FF';this.style.color='#EAF0FA';this.style.boxShadow='0 0 12px rgba(74,144,255,.15)'" onmouseout="this.style.borderColor='#334155';this.style.color='#94a3b8';this.style.boxShadow='none'">📄 Relatório</button>
+  <button class="btn-filter" onclick="gerarRelatorioPDF()" style="margin-left:auto;background:transparent;border:1px solid #334155;color:#94a3b8;transition:all .2s" onmouseover="this.style.borderColor='#14B8A6';this.style.color='#EAF0FA';this.style.boxShadow='0 0 12px rgba(20,184,166,.15)'" onmouseout="this.style.borderColor='#334155';this.style.color='#94a3b8';this.style.boxShadow='none'">📄 Relatório</button>
 </div>
 <div class="tabs" id="tabsContainer" style="display:none">
   <button class="tab active" data-tab="visao-geral">Visão Geral</button>
@@ -542,7 +560,9 @@ const fmtNum=v=>new Intl.NumberFormat('pt-BR').format(v);
 const fmtK=v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e6?`${s}R$ ${(a/1e6).toFixed(1)}M`:a>=1e3?`${s}R$ ${(a/1e3).toFixed(0)}K`:fmt(v)};
 const fmtM=v=>Math.abs(v)>=1e5?`${(v/1e6).toFixed(1)}M`:Math.abs(v)>=1e3?`${(v/1e3).toFixed(0)}K`:fmtNum(v);
 const mesNome=k=>{const[y,m]=k.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][m-1]+'/'+y.slice(2)};
-const cores=['#3b82f6','#22c55e','#ef4444','#eab308','#a855f7','#06b6d4','#f97316','#ec4899','#14b8a6','#8b5cf6','#f59e0b','#10b981','#6366f1','#84cc16','#e11d48'];
+// Paleta rotativa para charts genéricos. Setup azul-céu (#0EA5E9) substitui o azul Koti
+// para não competir com o accent teal de marca (#14B8A6).
+const cores=['#0EA5E9','#22c55e','#ef4444','#eab308','#a855f7','#06b6d4','#f97316','#ec4899','#14b8a6','#8b5cf6','#f59e0b','#10b981','#6366f1','#84cc16','#e11d48'];
 const parseDate=d=>{try{const[dd,mm,yy]=d.split('/');return new Date(yy,mm-1,dd)}catch{return null}};
 const toYM=d=>{try{const[dd,mm,yy]=d.split('/');return `${yy}-${mm}`}catch{return null}};
 
@@ -931,7 +951,7 @@ async function renderBubbleMapBR(porIbge){
     charts.geoBubble=new Chart(canvas,{type:'bubbleMap',
       data:{datasets:[{label:'Cidades',outline:geo.features,borderColor:'rgba(255,255,255,.1)',
         showOutline:true,
-        backgroundColor:'rgba(74,144,255,.55)',
+        backgroundColor:'rgba(20,184,166,.55)',
         data:bubbles}]},
       options:{responsive:true,maintainAspectRatio:false,showOutline:true,showGraticule:false,
         plugins:{legend:{display:false},datalabels:{display:false},
@@ -962,7 +982,7 @@ async function renderChoroplethBR(porEstado){
           tooltip:{callbacks:{label:ctx=>{const f=features[ctx.dataIndex];const uf=f.properties.sigla;const d=porEstado[uf]||{receita:0,clientes:0};const ticket=d.clientes>0?fmt(d.receita/d.clientes):'—';return[f.properties.name+' ('+uf+')','Receita: '+fmt(d.receita),'Clientes: '+d.clientes,'Ticket médio: '+ticket]}}}},
         scales:{projection:{axis:'x',projection:'mercator'},
           color:{axis:'x',quantize:5,
-            interpolate:t=>'rgba(74,144,255,'+Math.max(0.08,t).toFixed(2)+')',
+            interpolate:t=>'rgba(20,184,166,'+Math.max(0.08,t).toFixed(2)+')',
             missing:'rgba(255,255,255,.04)',
             legend:{position:'bottom-right',align:'bottom',length:140,width:8}}}}});
   }catch(e){console.error('renderChoroplethBR error',e);canvas.parentElement.innerHTML='<p style="color:var(--muted);padding:24px;text-align:center">Erro ao renderizar o mapa: '+String(e.message||e)+'</p>'}
@@ -1099,7 +1119,7 @@ function renderAll(){
 }
 
 Chart.register(ChartDataLabels);
-Chart.defaults.color='#94a3be';
+Chart.defaults.color='#8FA8A4';
 const dlCurrency={display:ctx=>ctx.dataset.data[ctx.dataIndex]!==0,color:'#cbd5e1',font:{size:9,weight:500},anchor:'end',align:'end',formatter:v=>fmtK(v)};
 const dlNum={display:ctx=>ctx.dataset.data[ctx.dataIndex]!==0,color:'#cbd5e1',font:{size:9,weight:500},anchor:'end',align:'end',formatter:v=>fmtNum(v)};
 const dlNone={display:false};
@@ -1162,7 +1182,7 @@ function renderVisaoGeral(d,dc){
 
   // KPIs
   document.getElementById('vg-kpis').innerHTML=`
-    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita ${getPeriodoLabel()} <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#4A90FF">${fmt(recMes)}</div><div class="vg-sub">${getPeriodoCompareLabel()} ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
+    <div class="vg-kpi bar-blue"><div class="vg-lbl">Receita ${getPeriodoLabel()} <div class="periodo-btns" style="display:inline-flex;margin-left:6px;vertical-align:middle"><button onclick="setRecMesMode('caixa',this)" class="${_recMesMode==='caixa'?'active':''}" style="font-size:9px;padding:2px 6px">Caixa</button><button onclick="setRecMesMode('competencia',this)" class="${_recMesMode==='competencia'?'active':''}" style="font-size:9px;padding:2px 6px">Compet.</button></div></div><div class="vg-val" style="color:#14B8A6">${fmt(recMes)}</div><div class="vg-sub">${getPeriodoCompareLabel()} ${varRec!=='--'?(Number(varRec)>=0?'↑':'↓')+Math.abs(varRec)+'%':'--'}</div><p class="chart-note">${_recMesMode==='caixa'?'Caixa (data de pagamento)':'Competência (data de vencimento)'}</p></div>
     <div class="vg-kpi ${resultado>=0?'bar-green':'bar-red'}"><div class="vg-lbl">Resultado Operacional</div><div class="vg-val" style="color:${resultado>=0?'#3DDC97':'#FF6B6B'}">${fmt(resultado)}</div><div class="vg-sub">Margem ${margem}%</div><p class="chart-note">Competência. Rec. op. − Desp. op. (exclui financeiras, CAPEX, IRPJ/CSLL, empréstimos)</p></div>
     <div class="vg-kpi bar-cyan"><div class="vg-lbl">Caixa Total</div><div class="vg-val" style="color:#2DD4BF">${fmt(saldoTotal)}</div><div class="vg-sub">${varSaldo!=='--'?(Number(varSaldo)>=0?'↑':'↓')+Math.abs(varSaldo)+'% vs mês ant':'--'}</div></div>
     <div class="vg-kpi ${corRunway}"><div class="vg-lbl">Meses de Caixa</div><div class="vg-val" style="color:${corRunwayTxt}">${runwayTxt}</div><div class="vg-sub">meses de operação</div><p class="chart-note">Saldo ÷ média despesas 3m</p></div>
@@ -1204,7 +1224,7 @@ function renderVisaoGeral(d,dc){
   const temProj=caixaProjFlag.some(Boolean);
   charts.spkCx=new Chart(document.getElementById('sparkCaixa'),{type:'line',data:{
     labels:m6.map(mesNome),
-    datasets:[{data:caixaAcum,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.4,
+    datasets:[{data:caixaAcum,borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:true,tension:.4,
       segment:{borderDash:ctx=>caixaProjFlag[ctx.p1DataIndex]?[4,3]:undefined}}]
   },options:{...sparkOpts,scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk2Max,suggestedMin:spk2Min}}}});
   const cxNote=document.querySelector('#page-visao-geral .vg-spark canvas#sparkCaixa')?.closest('.vg-spark')?.querySelector('.chart-note');
@@ -1290,7 +1310,7 @@ function renderVisaoGeral(d,dc){
   charts.spkFat=new Chart(document.getElementById('sparkFat'),{data:{
     labels:m6.map(mesNome),
     datasets:[
-      {type:'bar',data:fatData,backgroundColor:'#4A90FF88',borderColor:'#4A90FF',borderWidth:1,borderRadius:4},
+      {type:'bar',data:fatData,backgroundColor:'#14B8A688',borderColor:'#14B8A6',borderWidth:1,borderRadius:4},
       {type:'line',data:fatYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
     ]
   },options:{...sparkOpts,layout:{padding:{top:25}},scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk5Max}}}});
@@ -1411,8 +1431,8 @@ function renderProjecaoCaixa(d){
   const pisoData=dias.map(()=>pisoRunway);
   charts.projecaoCx=new Chart(document.getElementById('chartProjecaoCaixa'),{type:'line',
     data:{labels,datasets:[
-      {label:'Saldo Projetado',data:saldos,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.15,pointRadius:0,borderWidth:2,
-        pointBackgroundColor:saldos.map(s=>s<0?'#FF6B6B':s<pisoRunway?'#FFB547':'#4A90FF'),
+      {label:'Saldo Projetado',data:saldos,borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:true,tension:.15,pointRadius:0,borderWidth:2,
+        pointBackgroundColor:saldos.map(s=>s<0?'#FF6B6B':s<pisoRunway?'#FFB547':'#14B8A6'),
         datalabels:{display:ctx=>[0,30,60,90].includes(ctx.dataIndex),color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',offset:4,formatter:(v,ctx)=>{const lbls={0:'Hoje',30:'+30d',60:'+60d',90:'+90d'};return lbls[ctx.dataIndex]+': '+fmtK(v)}}},
       {label:'Piso Crítico (3m desp.)',data:pisoData,borderColor:'#FFB547',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false,order:0,
         datalabels:{display:false}}
@@ -1474,7 +1494,7 @@ function renderFluxoCaixa(d){
   const fSaldo=fMeses.map(m=>fSaldoMap[m]||0);
   charts.fSaldo=new Chart(document.getElementById('chartFluxoSaldo'),{type:'line',data:{
     labels:fMeses.map(mesNome),
-    datasets:[{label:'Saldo Bancário',data:fSaldo,borderColor:'#3b82f6',backgroundColor:'#3b82f622',fill:true,tension:.4,pointRadius:4,pointBackgroundColor:fSaldo.map(v=>v>=0?'#22c55e':'#ef4444')}]
+    datasets:[{label:'Saldo Bancário',data:fSaldo,borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:true,tension:.4,pointRadius:4,pointBackgroundColor:fSaldo.map(v=>v>=0?'#22c55e':'#ef4444')}]
   },options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{display:false},datalabels:{display:true,color:'#cbd5e1',font:{size:9},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
 
   // Charts — barras horizontais simples por grupo
@@ -1840,11 +1860,11 @@ function renderFinanceiro(d){
     data:{labels:meses.map(mesNome),datasets:[
       {label:'Margem Bruta',data:mbArr,borderColor:'#3DDC97',backgroundColor:'#3DDC9711',tension:.25,pointRadius:3,borderWidth:2,
         datalabels:{display:true,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
-      {label:'Margem EBITDA',data:ebArr,borderColor:'#4A90FF',backgroundColor:'#4A90FF11',tension:.25,pointRadius:3,borderWidth:2,
-        datalabels:{display:true,color:'#4A90FF',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
+      {label:'Margem EBITDA',data:ebArr,borderColor:'#14B8A6',backgroundColor:'#14B8A611',tension:.25,pointRadius:3,borderWidth:2,
+        datalabels:{display:true,color:'#14B8A6',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
       {label:'Margem LL',data:llArr,borderColor:'#A78BFA',backgroundColor:'#A78BFA11',tension:.25,pointRadius:3,borderWidth:2,
         datalabels:{display:true,color:'#A78BFA',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
-      {label:'M. EBITDA Ano Ant.',data:ebYoY,borderColor:'rgba(74,144,255,.35)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(74,144,255,.35)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+      {label:'M. EBITDA Ano Ant.',data:ebYoY,borderColor:'rgba(20,184,166,.35)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(20,184,166,.35)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:18}},
       scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
@@ -1895,7 +1915,7 @@ function renderFinanceiro(d){
   if(charts.sgaBreak){charts.sgaBreak.destroy();delete charts.sgaBreak}
   const sgaData=[
     {label:'Comercial (2.02)',value:totais.comercial,color:'#FF6B6B'},
-    {label:'Pessoal (2.03)',value:totais.pessoal,color:'#4A90FF'},
+    {label:'Pessoal (2.03)',value:totais.pessoal,color:'#0EA5E9'},
     {label:'Admin (2.04)',value:totais.admin,color:'#FFB547'}
   ].filter(s=>s.value>0);
   if(sgaData.length){
@@ -1908,7 +1928,7 @@ function renderFinanceiro(d){
 // ============ RECEITAS ============
 const LINHAS_RECEITA = {
   '1.01.02': {nome: 'Mensalidade', cor: '#3DDC97'},
-  '1.01.03': {nome: 'Setup', cor: '#4A90FF'},
+  '1.01.03': {nome: 'Setup', cor: '#0EA5E9'},
   '1.01.99': {nome: 'Etiquetas', cor: '#FFB547'},
   '1.01.98': {nome: 'Locação', cor: '#A78BFA'},
   '1.01.01': {nome: 'Comissionamento', cor: '#2DD4BF'},
@@ -2064,7 +2084,7 @@ function renderVendas(dc){
   const topCli=Object.entries(dc.porCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
   charts.topCli=new Chart(document.getElementById('chartTopClientes'),{type:'bar',data:{labels:topCli.map(e=>e[0].substring(0,30)),datasets:[{data:topCli.map(e=>e[1]),backgroundColor:'#22c55e88'}]},options:hBarOpts()});
   const topPrj=Object.entries(dc.porProj).filter(e=>e[1].entrada>0).sort((a,b)=>b[1].entrada-a[1].entrada).slice(0,10);
-  charts.topPrjV=new Chart(document.getElementById('chartTopProjVendas'),{type:'bar',data:{labels:topPrj.map(e=>e[1].nome.substring(0,30)),datasets:[{data:topPrj.map(e=>e[1].entrada),backgroundColor:'#3b82f688'}]},options:hBarOpts()});
+  charts.topPrjV=new Chart(document.getElementById('chartTopProjVendas'),{type:'bar',data:{labels:topPrj.map(e=>e[1].nome.substring(0,30)),datasets:[{data:topPrj.map(e=>e[1].entrada),backgroundColor:'#14B8A688'}]},options:hBarOpts()});
 }
 
 // ============ CLIENTES ============
@@ -2111,8 +2131,8 @@ function renderMrrProjChart(proj,lista){
   charts.mrrProj=new Chart(document.getElementById('chartMrrProj'),{data:{
     labels,
     datasets:[
-      {type:'line',label:'MRR Contratado',data:mrrLine,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:true,tension:.25,pointRadius:4,pointBackgroundColor:'#4A90FF',borderWidth:2,yAxisID:'y',order:0,
-        datalabels:{display:true,color:'#4A90FF',font:{size:9,weight:600},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}},
+      {type:'line',label:'MRR Contratado',data:mrrLine,borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:true,tension:.25,pointRadius:4,pointBackgroundColor:'#14B8A6',borderWidth:2,yAxisID:'y',order:0,
+        datalabels:{display:true,color:'#14B8A6',font:{size:9,weight:600},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}},
       {type:'line',label:'MRR + Tendência',data:mrrTend,borderColor:'#3DDC97',borderDash:[6,4],borderWidth:2,pointRadius:3,pointBackgroundColor:'#3DDC97',fill:false,tension:.25,yAxisID:'y',order:0,
         datalabels:{display:ctx=>ctx.dataIndex===ctx.dataset.data.length-1,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}},
       {type:'bar',label:'Entrando',data:entram,backgroundColor:'#3DDC97aa',borderColor:'#3DDC97',borderWidth:1,yAxisID:'y2',order:1,
@@ -2122,7 +2142,7 @@ function renderMrrProjChart(proj,lista){
     ]
   },options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:24}},
     scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
-      y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
+      y:{position:'left',ticks:{color:'#14B8A6',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
       y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta mês (R$)',color:'#94a3b8'}}},
     plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
 
@@ -2278,12 +2298,12 @@ function renderMrrBridge(lista){
         datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>'+'+fmtK(v)}},
       {type:'bar',label:'Churn',data:churnMes.map(v=>-v),backgroundColor:'#FF6B6Baa',borderColor:'#FF6B6B',borderWidth:1,yAxisID:'y2',order:2,
         datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]<0,color:'#FF6B6B',font:{size:9,weight:600},anchor:'start',align:'bottom',formatter:v=>fmtK(v)}},
-      {type:'line',label:'MRR Fim do Mês',data:mrrMesFim,borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:false,tension:.25,pointRadius:4,pointBackgroundColor:'#4A90FF',borderWidth:2.5,yAxisID:'y',order:1,
-        datalabels:{display:ctx=>ctx.dataIndex===0||ctx.dataIndex===ctx.dataset.data.length-1,color:'#4A90FF',font:{size:10,weight:700},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}}
+      {type:'line',label:'MRR Fim do Mês',data:mrrMesFim,borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:false,tension:.25,pointRadius:4,pointBackgroundColor:'#14B8A6',borderWidth:2.5,yAxisID:'y',order:1,
+        datalabels:{display:ctx=>ctx.dataIndex===0||ctx.dataIndex===ctx.dataset.data.length-1,color:'#14B8A6',font:{size:10,weight:700},anchor:'end',align:'top',offset:4,formatter:v=>fmtK(v)}}
     ]
   },options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:24}},
     scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
-      y:{position:'left',ticks:{color:'#4A90FF',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
+      y:{position:'left',ticks:{color:'#14B8A6',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'},title:{display:true,text:'MRR (R$)',color:'#94a3b8'}},
       y2:{position:'right',ticks:{color:'#94a3b8',callback:v=>fmtK(Math.abs(v))},grid:{display:false},title:{display:true,text:'Delta do mês (R$)',color:'#94a3b8'}}},
     plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}}}});
 }
@@ -2340,7 +2360,7 @@ function renderCtrTicket(lista){
     for(const b of buckets){if(v>=b.min&&v<b.max){b.count+=1;break}}
   });
   const total=ativos.length;
-  const cores=['#FF6B6B','#FFB547','#4A90FF','#3DDC97','#2DD4BF','#A78BFA','#FB923C'];
+  const cores=['#FF6B6B','#FFB547','#14B8A6','#3DDC97','#2DD4BF','#A78BFA','#FB923C'];
   charts.ctrTicket=new Chart(document.getElementById('chartCtrTicket'),{type:'bar',
     data:{labels:buckets.map(b=>b.label),datasets:[{data:buckets.map(b=>b.count),backgroundColor:cores.map(c=>c+'aa'),borderColor:cores,borderWidth:1,borderRadius:4,
       datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',offset:2,
@@ -2355,7 +2375,7 @@ function renderOnboardingTable(onboarding,mrrPipeline,esc){
   const el=document.getElementById('onboardingLista');
   if(!onboarding.length){el.innerHTML='<p style="color:var(--muted);padding:16px">Nenhum contrato em onboarding.</p>';return}
   const rows=onboarding.map(c=>{
-    const corDias=c.dias_ate_comecar>30?'var(--muted)':c.dias_ate_comecar>0?'#4A90FF':'#FFB547';
+    const corDias=c.dias_ate_comecar>30?'var(--muted)':c.dias_ate_comecar>0?'#14B8A6':'#FFB547';
     return '<tr><td><strong>'+esc(c.numero)+'</strong></td><td>'+esc(c.cliente_nome)+'</td><td style="text-align:right" class="valor-entrada">'+fmt(c.valor_mensal)+'</td><td>'+esc(c.vigencia_inicio)+'</td><td style="text-align:right;color:'+corDias+'">'+c.dias_ate_comecar+'d</td></tr>';
   }).join('');
   el.innerHTML='<table><thead><tr><th>Contrato</th><th>Cliente</th><th style="text-align:right">MRR</th><th>Início</th><th style="text-align:right">Dias</th></tr></thead><tbody>'+rows+'<tr style="font-weight:700;border-top:2px solid var(--accent)"><td colspan="2">TOTAL</td><td style="text-align:right" class="valor-entrada">'+fmt(mrrPipeline)+'</td><td colspan="2">'+onboarding.length+' contratos</td></tr></tbody></table>';
@@ -2389,7 +2409,7 @@ function renderContratos(){
     const _esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
     const kpiHtml=
       '<div class="kpi-card"><div class="kpi-label">MRR Atual</div><div class="kpi-value green">'+fmt(mrr)+'</div><div class="kpi-sub">'+ativos+' contratos faturando · ticket médio '+(ativos>0?fmt(mrr/ativos):'—')+'</div></div>'+
-      '<div class="kpi-card"><div class="kpi-label">Pipeline Onboarding</div><div class="kpi-value" style="color:#4A90FF">'+fmt(mrrPipeline)+'</div><div class="kpi-sub">'+futuros+' contratos assinados aguardando início</div></div>'+
+      '<div class="kpi-card"><div class="kpi-label">Pipeline Onboarding</div><div class="kpi-value" style="color:#14B8A6">'+fmt(mrrPipeline)+'</div><div class="kpi-sub">'+futuros+' contratos assinados aguardando início</div></div>'+
       '<div class="kpi-card"><div class="kpi-label">MRR em 3 meses</div><div class="kpi-value cyan">'+fmt(mrr3m)+'</div><div class="kpi-sub">'+(deltaMrr3m>=0?'+':'')+deltaMrr3m.toFixed(1)+'% vs hoje · só crescimento contratado</div></div>'+
       '<div class="kpi-card"><div class="kpi-label">MRR em Risco (12m)</div><div class="kpi-value" style="color:'+(mrrTerm>0?'#FFB547':'#3DDC97')+'">'+fmt(mrrTerm)+'</div><div class="kpi-sub">'+terminando.length+' contratos terminam em até 12m</div></div>';
     document.getElementById('kpi-contratos').innerHTML=kpiHtml;
@@ -2406,7 +2426,7 @@ function renderContratos(){
     const statusCores={'Ativo':'#3DDC97','Cancelado':'#FF6B6B','Suspenso':'#FFB547','Encerrado':'#94a3b8','Renovado':'#A78BFA','90':'#FFB547','99':'#94a3b8'};
     if(charts.ctrStatus){charts.ctrStatus.destroy();delete charts.ctrStatus}
     charts.ctrStatus=new Chart(document.getElementById('chartContratosStatus'),{type:'doughnut',data:{
-      labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
+      labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#14B8A6')}]
     },options:{...dOpts,cutout:'55%'}});
 
     // Faturamento mensal de contratos (receita 1.01.* por mês, regime caixa) + YoY all-time
@@ -2764,7 +2784,7 @@ function exportarMemoriaComissao(){
 // ============ COBRANÇA ============
 const LINHAS_COBRANCA = {
   '1.01.02': {nome: 'Mensalidade', cor: '#3DDC97'},
-  '1.01.03': {nome: 'Setup', cor: '#4A90FF'},
+  '1.01.03': {nome: 'Setup', cor: '#0EA5E9'},
   '1.01.99': {nome: 'Etiquetas', cor: '#FFB547'},
   '1.01.98': {nome: 'Locação', cor: '#A78BFA'},
   '1.01.01': {nome: 'Comissionamento', cor: '#2DD4BF'},
@@ -2873,8 +2893,8 @@ function renderCobrancaRecuperacao(){
       datasets:[
         {type:'bar',label:'Valor',data:buckets,backgroundColor:barColors,borderColor:barBorders,borderWidth:1,yAxisID:'y',order:2,
           datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}},
-        {type:'line',label:'% recuperado acumulado',data:acumulado.map((v,i)=>i<7?v:null),borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:false,tension:.25,pointRadius:3,pointBackgroundColor:'#4A90FF',borderWidth:2,yAxisID:'y2',order:1,spanGaps:false,
-          datalabels:{display:ctx=>ctx.dataIndex===6&&ctx.dataset.data[6]!=null,color:'#4A90FF',font:{size:11,weight:700},anchor:'end',align:'top',offset:6,formatter:v=>v.toFixed(0)+'%'}}
+        {type:'line',label:'% recuperado acumulado',data:acumulado.map((v,i)=>i<7?v:null),borderColor:'#14B8A6',backgroundColor:'#14B8A622',fill:false,tension:.25,pointRadius:3,pointBackgroundColor:'#14B8A6',borderWidth:2,yAxisID:'y2',order:1,spanGaps:false,
+          datalabels:{display:ctx=>ctx.dataIndex===6&&ctx.dataset.data[6]!=null,color:'#14B8A6',font:{size:11,weight:700},anchor:'end',align:'top',offset:6,formatter:v=>v.toFixed(0)+'%'}}
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28,right:20}},
@@ -2882,7 +2902,7 @@ function renderCobrancaRecuperacao(){
       scales:{
         x:{ticks:{color:'#94a3b8'},grid:{display:false}},
         y:{position:'left',title:{display:true,text:'R$ recuperado/em aberto',color:'#94a3b8',font:{size:11}},ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}},
-        y2:{position:'right',min:0,max:100,title:{display:true,text:'% recuperado da carteira vencida',color:'#4A90FF',font:{size:11}},ticks:{color:'#4A90FF',callback:v=>v+'%'},grid:{display:false}}
+        y2:{position:'right',min:0,max:100,title:{display:true,text:'% recuperado da carteira vencida',color:'#14B8A6',font:{size:11}},ticks:{color:'#14B8A6',callback:v=>v+'%'},grid:{display:false}}
       }
     }
   });
@@ -2913,7 +2933,7 @@ function _renderCobrancaView(){
   // Aging buckets
   const bucketDefs=[
     {label:'0-30d',min:0,max:30,cor:'#3DDC97'},
-    {label:'31-60d',min:31,max:60,cor:'#4A90FF'},
+    {label:'31-60d',min:31,max:60,cor:'#14B8A6'},
     {label:'61-90d',min:61,max:90,cor:'#FFB547'},
     {label:'>90d',min:91,max:999999,cor:'#FF6B6B'}
   ];
@@ -2958,7 +2978,7 @@ function _renderCobrancaView(){
       const [y,mo]=m.split('-').map(Number);
       const idade=(hoje.getFullYear()-y)*12+(hoje.getMonth()+1-mo);
       return idade>3?'#FF6B6Baa':idade>1?'#FFB547aa':'#3DDC97aa';
-    }),borderColor:'#0F1420',borderWidth:1,borderRadius:4,
+    }),borderColor:'#0F1719',borderWidth:1,borderRadius:4,
       datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:9,weight:600},anchor:'end',align:'top',offset:2,
         formatter:(v,ctx)=>{const m=mesesVenc[ctx.dataIndex];return fmtK(v)+' · '+porMesVenc[m].count+'t'}}}]},
     options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},
@@ -3083,7 +3103,7 @@ function renderProjetos(dc){
     const t=Math.log(1+v)/Math.log(1+maxRec);
     // Gradient: low=dark blue, high=bright blue
     const alpha=Math.max(0.15,t);
-    return 'rgba(74,144,255,'+alpha.toFixed(2)+')';
+    return 'rgba(20,184,166,'+alpha.toFixed(2)+')';
   };
   let geoHtml='';
   REGIOES.forEach(([regNome,ufs])=>{
@@ -3103,7 +3123,7 @@ function renderProjetos(dc){
   if(charts.geoTop){charts.geoTop.destroy();delete charts.geoTop}
   const topEstados=estados.filter(e=>e[0]!=='—').slice(0,10);
   charts.geoTop=new Chart(document.getElementById('chartGeoTop'),{type:'bar',
-    data:{labels:topEstados.map(e=>e[0]),datasets:[{data:topEstados.map(e=>e[1].receita),backgroundColor:'#4A90FFaa',borderColor:'#4A90FF',borderWidth:1,borderRadius:4}]},
+    data:{labels:topEstados.map(e=>e[0]),datasets:[{data:topEstados.map(e=>e[1].receita),backgroundColor:'#14B8A6aa',borderColor:'#14B8A6',borderWidth:1,borderRadius:4}]},
     options:hBarOpts()});
 
   // ---- Bar chart: Ticket Médio por UF (top 10 por receita) ----
@@ -3207,7 +3227,7 @@ function gerarRelatorioPDF(){
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   const W=297,H=210;
-  const BG='#0a0e17',CARD='#0F1420',MUTED='#94a3b8',WHITE='#EAF0FA',GREEN='#3DDC97',RED='#FF6B6B',BLUE='#4A90FF',CYAN='#2DD4BF',YELLOW='#FFB547';
+  const BG='#0A1014',CARD='#0F1719',MUTED='#8FA8A4',WHITE='#E8F2F0',GREEN='#3DDC97',RED='#FF6B6B',BLUE='#14B8A6',CYAN='#22D3EE',YELLOW='#FFB547';
   const de=document.getElementById('filterDe').value,ate=document.getElementById('filterAte').value;
   const agora=new Date();
   const dataStr=agora.toLocaleDateString('pt-BR');
