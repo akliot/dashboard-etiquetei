@@ -1238,11 +1238,15 @@ function renderVisaoGeral(d,dc){
     const sga=sgaPorMes[m]||0;
     return Math.round(rec-imp-custo-sga);
   });
-  const spk3Max=Math.max(...ebitdaData)*1.2;
-  const spk3Min=Math.min(...ebitdaData,0)*1.2;
+  // YoY EBITDA: usa DRE all-time (modo Imp Real). No modo Teórico, mantém a comparação coerente com o real (DRE all-time é Imp Real).
+  const ebitdaAllDre=computeAllTimeDre();
+  const ebitdaYoY=m6.map(m=>{const prev=ebitdaAllDre[getYoYMonth(m)];return prev?prev.ebitda:null});
+  const spk3Max=Math.max(...ebitdaData,...ebitdaYoY.filter(v=>v!=null))*1.2;
+  const spk3Min=Math.min(...ebitdaData,...ebitdaYoY.filter(v=>v!=null),0)*1.2;
   charts.spkEbitda=new Chart(document.getElementById('sparkEbitda'),{type:'bar',data:{
     labels:m6.map(mesNome),
-    datasets:[{data:ebitdaData,backgroundColor:ebitdaData.map(v=>v>=0?'#3DDC9788':'#FF6B6B88'),borderColor:ebitdaData.map(v=>v>=0?'#3DDC97':'#FF6B6B'),borderWidth:1,borderRadius:4}]
+    datasets:[{data:ebitdaData,backgroundColor:ebitdaData.map(v=>v>=0?'#3DDC9788':'#FF6B6B88'),borderColor:ebitdaData.map(v=>v>=0?'#3DDC97':'#FF6B6B'),borderWidth:1,borderRadius:4},
+      {type:'line',data:ebitdaYoY,borderColor:'rgba(255,255,255,.2)',borderDash:[3,3],borderWidth:1.5,pointRadius:0,tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}]
   },options:{...sparkOpts,layout:{padding:{top:25}},scales:{x:{display:true,ticks:{color:'rgba(255,255,255,.3)',font:{size:9}},grid:{display:false}},y:{display:false,suggestedMax:spk3Max,suggestedMin:spk3Min}}}});
   // Nota dinâmica
   const noteEl=document.getElementById('ebitdaNote');
@@ -1443,12 +1447,16 @@ function renderFluxoCaixa(d){
       {label:'Despesa Ano Ant.',data:fYoYSai,...yoyLine}
     ]},options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8'}},datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#cbd5e1',font:{size:9},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
 
-  // Resultado mensal em R$ (entrada - saída)
+  // Resultado mensal em R$ (entrada - saída) + YoY (mesma base regime caixa do _allPorMes)
   const fRes=fMeses.map((m,i)=>fEnt[i]-fSai[i]);
+  const fResYoY=fMeses.map(m=>{const pm=getAllPorMes()[getYoYMonth(m)];return pm?(pm.entrada||0)-(pm.saida||0):null});
   charts.fVarCaixa=new Chart(document.getElementById('chartFluxoVarCaixa'),{type:'bar',data:{
     labels:fMeses.map(mesNome),
-    datasets:[{label:'Resultado',data:fRes,backgroundColor:fRes.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:fRes.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1}]
-  },options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{display:false},datalabels:{display:true,color:'#cbd5e1',font:{size:9},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
+    datasets:[
+      {label:'Resultado',data:fRes,backgroundColor:fRes.map(v=>v>=0?'#22c55e88':'#ef444488'),borderColor:fRes.map(v=>v>=0?'#22c55e':'#ef4444'),borderWidth:1},
+      {type:'line',label:'Resultado Ano Ant.',data:fResYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},datalabels:{display:ctx=>ctx.dataset.type!=='line'&&ctx.dataset.data[ctx.dataIndex]!==null,color:'#cbd5e1',font:{size:9},anchor:'end',align:'top',offset:2,formatter:v=>fmtK(v)}}}});
 
   // Saldo bancário real (historico_conciliacao)
   const fHist=(dadosOriginal.historico_conciliacao||[]).filter(h=>h.tipo==='mensal');
@@ -1815,6 +1823,9 @@ function renderFinanceiro(d){
   const mbArr=meses.map(m=>toPct(dre.margemBruta[m],dre.receitaLiquida[m]));
   const ebArr=meses.map(m=>toPct(dre.ebitda[m],dre.receitaLiquida[m]));
   const llArr=meses.map(m=>toPct(dre.lucroLiquido[m],dre.receitaLiquida[m]));
+  // YoY: só Margem EBITDA (3 linhas YoY pontilhadas adicionais poluiriam o gráfico já com 3 séries)
+  const allMargensDre=computeAllTimeDre();
+  const ebYoY=meses.map(m=>{const prev=allMargensDre[getYoYMonth(m)];return prev&&prev.rl>0?Math.round(prev.ebitda/prev.rl*1000)/10:null});
   charts.finMargens=new Chart(document.getElementById('chartMargens'),{type:'line',
     data:{labels:meses.map(mesNome),datasets:[
       {label:'Margem Bruta',data:mbArr,borderColor:'#3DDC97',backgroundColor:'#3DDC9711',tension:.25,pointRadius:3,borderWidth:2,
@@ -1822,7 +1833,8 @@ function renderFinanceiro(d){
       {label:'Margem EBITDA',data:ebArr,borderColor:'#4A90FF',backgroundColor:'#4A90FF11',tension:.25,pointRadius:3,borderWidth:2,
         datalabels:{display:true,color:'#4A90FF',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
       {label:'Margem LL',data:llArr,borderColor:'#A78BFA',backgroundColor:'#A78BFA11',tension:.25,pointRadius:3,borderWidth:2,
-        datalabels:{display:true,color:'#A78BFA',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}}
+        datalabels:{display:true,color:'#A78BFA',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>v.toFixed(0)+'%'}},
+      {label:'M. EBITDA Ano Ant.',data:ebYoY,borderColor:'rgba(74,144,255,.35)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(74,144,255,.35)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index'},layout:{padding:{top:18}},
       scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
@@ -1950,21 +1962,34 @@ function renderVendas(dc){
   Object.values(recPorLinhaMes).forEach(mm=>Object.keys(mm).forEach(m=>allMeses.add(m)));
   const meses=[...allMeses].sort();
 
-  // ---- Gráfico 1: Stacked Bar — Receita por Linha (mensal) ----
+  // ---- Gráfico 1: Stacked Bar — Receita por Linha (mensal) + YoY (total das linhas 1.01.*) ----
   const stackDS=Object.entries(LINHAS_RECEITA).map(([cat,info])=>({
     label:info.nome,
     data:meses.map(m=>(recPorLinhaMes[cat]||{})[m]||0),
     backgroundColor:info.cor+'aa',
     borderColor:info.cor,
-    borderWidth:1
+    borderWidth:1,
+    stack:'rec'
   }));
+  // YoY total: soma das mesmas categorias LINHAS_RECEITA por mês em todo histórico (regime caixa via l.data)
+  const allRecLinhaPorMes={};
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='entrada')return;
+    const cat=l.categoria||'';
+    const grupo=cat.split('.').slice(0,3).join('.');
+    if(!LINHAS_RECEITA[grupo])return;
+    const m=toYM(l.data);if(!m)return;
+    allRecLinhaPorMes[m]=(allRecLinhaPorMes[m]||0)+l.valor;
+  });
+  const recStackYoY=meses.map(m=>{const v=allRecLinhaPorMes[getYoYMonth(m)];return v!=null?v:null});
+  stackDS.push({type:'line',label:'Total Ano Ant.',data:recStackYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}});
   charts.recStack=new Chart(document.getElementById('chartRecStack'),{type:'bar',
     data:{labels:meses.map(mesNome),datasets:stackDS},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
               y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
       plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
-        datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>500,color:'#fff',font:{size:8,weight:600},anchor:'center',align:'center',
+        datalabels:{display:ctx=>ctx.dataset.type!=='line'&&ctx.dataset.data[ctx.dataIndex]>500,color:'#fff',font:{size:8,weight:600},anchor:'center',align:'center',
           formatter:v=>fmtK(v)}
       }}
   });
@@ -2374,7 +2399,7 @@ function renderContratos(){
       labels:statusLabels,datasets:[{data:statusVals,backgroundColor:statusLabels.map(s=>statusCores[s]||'#4A90FF')}]
     },options:{...dOpts,cutout:'55%'}});
 
-    // Faturamento mensal de contratos (receita 1.01.* por mês, regime caixa)
+    // Faturamento mensal de contratos (receita 1.01.* por mês, regime caixa) + YoY all-time
     if(charts.ctrFat){charts.ctrFat.destroy();delete charts.ctrFat}
     const fatMes={};
     dadosFiltrados.lancamentos.filter(l=>l.tipo==='entrada'&&(l.categoria||'').startsWith('1.01.')).forEach(l=>{
@@ -2382,11 +2407,23 @@ function renderContratos(){
     });
     const fatMeses=Object.keys(fatMes).sort();
     if(fatMeses.length){
+      // YoY: mesma regra (1.01.*, entrada, regime caixa) sobre dadosOriginal
+      const allCtrFatPorMes={};
+      (dadosOriginal.lancamentos||[]).forEach(l=>{
+        if(l.tipo!=='entrada')return;
+        if(!(l.categoria||'').startsWith('1.01.'))return;
+        const m=toYM(l.data);if(!m)return;
+        allCtrFatPorMes[m]=(allCtrFatPorMes[m]||0)+l.valor;
+      });
+      const ctrFatYoY=fatMeses.map(m=>{const v=allCtrFatPorMes[getYoYMonth(m)];return v!=null?v:null});
       charts.ctrFat=new Chart(document.getElementById('chartContratosFat'),{type:'bar',
-        data:{labels:fatMeses.map(mesNome),datasets:[{data:fatMeses.map(m=>fatMes[m]),backgroundColor:'#3DDC9788',borderColor:'#3DDC97',borderWidth:1,borderRadius:4}]},
+        data:{labels:fatMeses.map(mesNome),datasets:[
+          {data:fatMeses.map(m=>fatMes[m]),backgroundColor:'#3DDC9788',borderColor:'#3DDC97',borderWidth:1,borderRadius:4,label:'Faturamento'},
+          {type:'line',label:'Faturamento Ano Ant.',data:ctrFatYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+        ]},
         options:{responsive:true,maintainAspectRatio:false,
           scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
-          plugins:{legend:{display:false},datalabels:{display:true,color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}}}
+          plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},datalabels:{display:ctx=>ctx.dataset.type!=='line',color:'#3DDC97',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}}}
       });
     }
   }
@@ -2413,16 +2450,28 @@ function renderContratos(){
     <div class="kpi-card"><div class="kpi-label">Comissão Média Mensal</div><div class="kpi-value" style="color:#FB923C">${fmt(comMedia)}</div><div class="kpi-sub">${comMeses.length} meses</div></div>
     <div class="kpi-card"><div class="kpi-label">Vendedores</div><div class="kpi-value blue">${new Set(ctrLista.filter(c=>c.comissao_pct>0).map(c=>c.vendedor_nome)).size}</div><div class="kpi-sub">com comissão configurada</div></div>`;
 
-  // Gráfico evolução
+  // Gráfico evolução + YoY (comissões 2.02.01 saida em todo histórico)
   if(comMeses.length){
+    const allComPorMes={};
+    (dadosOriginal.lancamentos||[]).forEach(l=>{
+      if(l.tipo!=='saida')return;
+      const g=(l.categoria||'').split('.').slice(0,3).join('.');
+      if(g!=='2.02.01')return;
+      const m=toYM(l.data);if(!m)return;
+      allComPorMes[m]=(allComPorMes[m]||0)+l.valor;
+    });
+    const comYoY=comMeses.map(m=>{const v=allComPorMes[getYoYMonth(m)];return v!=null?v:null});
     charts.comEvo=new Chart(document.getElementById('chartComissaoEvo'),{type:'line',
-      data:{labels:comMeses.map(mesNome),datasets:[{label:'Comissão',data:comMeses.map(m=>comPorMesTotal[m]),
-        borderColor:'#FB923C',backgroundColor:'rgba(251,146,60,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#FB923C',borderWidth:2}]},
+      data:{labels:comMeses.map(mesNome),datasets:[
+        {label:'Comissão',data:comMeses.map(m=>comPorMesTotal[m]),
+          borderColor:'#FB923C',backgroundColor:'rgba(251,146,60,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#FB923C',borderWidth:2},
+        {label:'Comissão Ano Ant.',data:comYoY,borderColor:'rgba(255,255,255,.25)',borderDash:[5,5],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.25)',tension:.3,fill:false,spanGaps:false,order:0,datalabels:{display:false}}
+      ]},
       options:{responsive:true,maintainAspectRatio:false,
         scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
                 y:{ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}},
-        plugins:{legend:{display:false},
-          datalabels:{display:true,color:'#FB923C',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}
+        plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+          datalabels:{display:ctx=>ctx.datasetIndex===0,color:'#FB923C',font:{size:9,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}
         }}
     });
   }
