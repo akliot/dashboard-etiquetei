@@ -352,6 +352,16 @@ tr:hover td{background:rgba(20,184,166,.04)}
         <div class="chart-card"><h3>Receita Bruta vs Custos vs SG&amp;A <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartFinStack"></canvas></div><p class="chart-note">Composição mensal: receita, custo direto e SG&amp;A total.</p></div>
         <div class="chart-card"><h3>SG&amp;A — Composição <span class="regime-badge competencia">Competência</span></h3><div class="chart-container"><canvas id="chartSgaBreak"></canvas></div><p class="chart-note">Distribuição entre Comercial, Pessoal e Admin no período.</p></div>
       </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap">
+            <h3 style="margin:0">Marketing — Despesa Mensal por Tipo <span class="regime-badge competencia">Competência</span></h3>
+            <div id="kpiMktResultado" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(255,255,255,.7)"></div>
+          </div>
+          <div class="chart-container" style="height:280px"><canvas id="chartMktMensal"></canvas></div>
+          <p class="chart-note">Categorias agregadas: <strong>Marketing</strong> (2.02.02), <strong>Eventos</strong> (2.02.99) e <strong>Viagens comerciais</strong> (2.02.03). Comissões (2.02.01) ficam fora — analisadas em Contratos. Período = filtro do dashboard, regime competência (data de vencimento).</p>
+        </div>
+      </div>
     </div>
 
     <!-- RECEITAS -->
@@ -1922,6 +1932,64 @@ function renderFinanceiro(d){
     charts.sgaBreak=new Chart(document.getElementById('chartSgaBreak'),{type:'doughnut',
       data:{labels:sgaData.map(s=>s.label),datasets:[{data:sgaData.map(s=>s.value),backgroundColor:sgaData.map(s=>s.color+'aa'),borderColor:sgaData.map(s=>s.color),borderWidth:1}]},
       options:{...dOpts,cutout:'55%'}});
+  }
+
+  // ---- Marketing mensal por tipo (regime competência) ----
+  // Buckets por categoria_codigo, classificação conservadora baseada na auditoria do plano de contas.
+  // Comissões (2.02.01) excluídas — têm análise própria em Contratos.
+  if(charts.mktMensal){charts.mktMensal.destroy();delete charts.mktMensal}
+  const MKT_BUCKETS=[
+    {cod:'2.02.02',label:'Marketing',color:'#A78BFA'},
+    {cod:'2.02.99',label:'Eventos',color:'#FB923C'},
+    {cod:'2.02.03',label:'Viagens comerciais',color:'#22D3EE'}
+  ];
+  const mktMesPorBucket={};
+  MKT_BUCKETS.forEach(b=>{mktMesPorBucket[b.cod]={}});
+  (dadosFiltrados.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='saida')return;
+    const cod=l.categoria||'';
+    if(!mktMesPorBucket[cod])return;
+    const m=toYM(l.data_vencimento||l.data);if(!m)return;
+    mktMesPorBucket[cod][m]=(mktMesPorBucket[cod][m]||0)+(l.valor||0);
+  });
+  const mktDS=MKT_BUCKETS.map(b=>({
+    label:b.label,
+    data:meses.map(m=>mktMesPorBucket[b.cod][m]||0),
+    backgroundColor:b.color+'aa',
+    borderColor:b.color,
+    borderWidth:1,
+    stack:'mkt'
+  }));
+  const mktTotalPorMes=meses.map(m=>MKT_BUCKETS.reduce((s,b)=>s+(mktMesPorBucket[b.cod][m]||0),0));
+  mktDS.push({type:'line',label:'Total Marketing',data:mktTotalPorMes,borderColor:'rgba(255,255,255,.45)',borderDash:[4,4],borderWidth:1.5,pointRadius:2,pointBackgroundColor:'rgba(255,255,255,.45)',tension:.3,fill:false,order:0,datalabels:{display:false}});
+  // KPI-âncora: MKT no período · % Receita Líquida · MKT / SG&A
+  const mktTotalPeriodo=mktTotalPorMes.reduce((s,v)=>s+v,0);
+  const recLiqPeriodo=meses.reduce((s,m)=>s+(dre.receitaLiquida[m]||0),0);
+  const sgaPeriodo=meses.reduce((s,m)=>s+(dre.sgaTotal[m]||0),0);
+  const pctRec=recLiqPeriodo>0?(mktTotalPeriodo/recLiqPeriodo*100):null;
+  const pctSga=sgaPeriodo>0?(mktTotalPeriodo/sgaPeriodo*100):null;
+  const kpiMktEl=document.getElementById('kpiMktResultado');
+  if(kpiMktEl){
+    const fmtPct=v=>v==null?'—':v.toFixed(1).replace('.',',')+'%';
+    kpiMktEl.innerHTML='<span style="color:rgba(255,255,255,.5);font-size:11px;letter-spacing:.6px;text-transform:uppercase">MKT no período</span> '+
+      '<span style="color:#FB923C;font-size:16px;font-weight:700;margin-left:6px">'+fmtK(mktTotalPeriodo)+'</span>'+
+      '<span style="color:rgba(255,255,255,.4);font-size:11px;margin-left:14px">% Receita Líq.: <span style="color:#E8F2F0;font-weight:600">'+fmtPct(pctRec)+'</span></span>'+
+      '<span style="color:rgba(255,255,255,.4);font-size:11px;margin-left:10px">MKT / SG&A: <span style="color:#E8F2F0;font-weight:600">'+fmtPct(pctSga)+'</span></span>';
+  }
+  if(mktTotalPeriodo>0){
+    charts.mktMensal=new Chart(document.getElementById('chartMktMensal'),{
+      data:{labels:meses.map(mesNome),datasets:mktDS},
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+        plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}},
+          tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.parsed.y||0)}},
+          datalabels:{display:ctx=>ctx.dataset.type!=='line'&&(ctx.dataset.data[ctx.dataIndex]||0)>2000,color:'#fff',font:{size:8,weight:600},anchor:'center',align:'center',formatter:v=>fmtK(v)}},
+        scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,.04)'}},
+          y:{stacked:true,ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}}}
+      }
+    });
+  }else{
+    const canvas=document.getElementById('chartMktMensal');
+    if(canvas&&canvas.getContext){const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height)}
   }
 }
 
