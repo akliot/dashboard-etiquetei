@@ -510,6 +510,16 @@ tr:hover td{background:rgba(74,144,255,.04)}
       </div>
       <div class="chart-row">
         <div class="chart-card" style="grid-column:1/-1">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap">
+            <h3 style="margin:0">Curva de Recuperação <span class="regime-badge caixa">Histórico</span></h3>
+            <div id="kpiCobRec" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:rgba(255,255,255,.7)"></div>
+          </div>
+          <div class="chart-container" style="height:300px"><canvas id="chartCobRecuperacao"></canvas></div>
+          <p class="chart-note" id="cobRecNota">Base: entradas vencidas nos últimos 12 meses; dias entre vencimento e pagamento. Barras verdes/âmbar = recuperado; barra vermelha = ainda em aberto. Linha = % acumulado recuperado da carteira vencida (inclui em aberto no denominador).</p>
+        </div>
+      </div>
+      <div class="chart-row">
+        <div class="chart-card" style="grid-column:1/-1">
           <h3>Títulos Inadimplentes <span class="regime-badge caixa">Posição Atual</span></h3>
           <input type="text" class="search-input" id="cobrancaBusca" placeholder="🔍 Buscar cliente..." oninput="filtrarCobranca()">
           <div class="proj-table" id="cobrancaDetalhe" style="max-height:500px;overflow-y:auto"></div>
@@ -2784,7 +2794,98 @@ function renderCobranca(){
   });
   filtrosEl.innerHTML=btnHtml;
 
+  renderCobrancaRecuperacao();
   _renderCobrancaView();
+}
+
+// Curva de Recuperação v1 — entradas vencidas nos últimos 12 meses.
+// Dias = data_pagamento - data_vencimento para recuperados; ATRASADO = em aberto.
+// Denominador do % acumulado inclui em aberto (eficácia real, não só velocidade).
+function renderCobrancaRecuperacao(){
+  if(charts.cobRec){charts.cobRec.destroy();delete charts.cobRec}
+  const canvas=document.getElementById('chartCobRecuperacao');
+  const kpiEl=document.getElementById('kpiCobRec');
+  const notaEl=document.getElementById('cobRecNota');
+  if(!canvas)return;
+  const hoje=new Date();
+  const inicio=new Date(hoje.getFullYear(),hoje.getMonth()-11,1);
+  const STATUS_EXCL=new Set(['CANCELADO','A VENCER']);
+  const STATUS_REALIZADO=new Set(['RECEBIDO','PAGO','LIQUIDADO']);
+  const universo=[];
+  (dadosOriginal.lancamentos||[]).forEach(l=>{
+    if(l.tipo!=='entrada')return;
+    if(STATUS_EXCL.has(l.status))return;
+    const dv=parseDate(l.data_vencimento);
+    if(!dv||dv>hoje||dv<inicio)return;
+    const dp=STATUS_REALIZADO.has(l.status)?parseDate(l.data_pagamento):null;
+    const dias=dp?Math.floor((dp-dv)/86400000):null;
+    universo.push({valor:Math.abs(l.valor||0),dias,recuperado:dp!==null,dv});
+  });
+  if(!universo.length){
+    if(kpiEl)kpiEl.textContent='';
+    if(canvas.getContext){const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height)}
+    if(notaEl)notaEl.textContent='Sem títulos vencidos nos últimos 12 meses.';
+    return;
+  }
+  const labels=['No prazo','1-7d','8-15d','16-30d','31-60d','61-90d','90+d','Em aberto'];
+  const buckets=new Array(8).fill(0);
+  universo.forEach(t=>{
+    if(!t.recuperado){buckets[7]+=t.valor;return}
+    const d=t.dias;
+    if(d<=0)buckets[0]+=t.valor;
+    else if(d<=7)buckets[1]+=t.valor;
+    else if(d<=15)buckets[2]+=t.valor;
+    else if(d<=30)buckets[3]+=t.valor;
+    else if(d<=60)buckets[4]+=t.valor;
+    else if(d<=90)buckets[5]+=t.valor;
+    else buckets[6]+=t.valor;
+  });
+  const totalCarteira=buckets.reduce((s,v)=>s+v,0);
+  // Acumulado inclui buckets 0..6 (recuperados); bucket 7 (em aberto) não contribui ao acumulado mas entra no denominador.
+  const acumulado=[];
+  let run=0;
+  for(let i=0;i<8;i++){
+    if(i<7){run+=buckets[i]}
+    acumulado.push(totalCarteira>0?(run/totalCarteira)*100:0);
+  }
+  const recuperado30d=totalCarteira>0?((buckets[0]+buckets[1]+buckets[2]+buckets[3])/totalCarteira)*100:0;
+  const recTotal=buckets.slice(0,7).reduce((s,v)=>s+v,0);
+  const emAberto=buckets[7];
+  // KPI-âncora
+  const kpiCor=recuperado30d>=80?'#22c55e':recuperado30d>=60?'#eab308':'#ef4444';
+  if(kpiEl){
+    kpiEl.innerHTML='<span style="color:rgba(255,255,255,.5);font-size:11px;letter-spacing:.6px;text-transform:uppercase">Recuperado em 30 dias</span> '+
+      '<span style="color:'+kpiCor+';font-size:18px;font-weight:700;margin-left:8px">'+recuperado30d.toFixed(0)+'%</span>'+
+      '<span style="color:rgba(255,255,255,.4);font-size:11px;margin-left:10px">Recuperado total: '+fmtK(recTotal)+' · Em aberto: '+fmtK(emAberto)+'</span>';
+  }
+  // Subtítulo honesto: mostrar janela efetiva dos dados
+  const primeiroDv=universo.reduce((m,t)=>!m||t.dv<m?t.dv:m,null);
+  if(notaEl&&primeiroDv){
+    const mesIni=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][primeiroDv.getMonth()]+'/'+String(primeiroDv.getFullYear()).slice(2);
+    notaEl.textContent='Base: entradas vencidas nos últimos 12 meses (desde '+mesIni+'); dias entre vencimento e pagamento. Linha = % acumulado recuperado da carteira vencida (denominador inclui em aberto).';
+  }
+  // Paleta: recuperados em gradiente verde→vermelho por velocidade; em aberto em vermelho escuro distinto
+  const barColors=['#22c55e','#86efac','#facc15','#f59e0b','#f97316','#ef4444','#b91c1c','#7c1d1d'];
+  const barBorders=['#16a34a','#22c55e','#ca8a04','#d97706','#ea580c','#dc2626','#991b1b','#450a0a'];
+  charts.cobRec=new Chart(canvas,{
+    data:{
+      labels,
+      datasets:[
+        {type:'bar',label:'Valor',data:buckets,backgroundColor:barColors,borderColor:barBorders,borderWidth:1,yAxisID:'y',order:2,
+          datalabels:{display:ctx=>ctx.dataset.data[ctx.dataIndex]>0,color:'#e2e8f0',font:{size:10,weight:600},anchor:'end',align:'top',formatter:v=>fmtK(v)}},
+        {type:'line',label:'% recuperado acumulado',data:acumulado.map((v,i)=>i<7?v:null),borderColor:'#4A90FF',backgroundColor:'#4A90FF22',fill:false,tension:.25,pointRadius:3,pointBackgroundColor:'#4A90FF',borderWidth:2,yAxisID:'y2',order:1,spanGaps:false,
+          datalabels:{display:ctx=>ctx.dataIndex===6&&ctx.dataset.data[6]!=null,color:'#4A90FF',font:{size:11,weight:700},anchor:'end',align:'top',offset:6,formatter:v=>v.toFixed(0)+'%'}}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28,right:20}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const i=ctx.dataIndex;if(ctx.dataset.type==='line')return ctx.dataset.data[i]==null?null:'Acumulado: '+ctx.dataset.data[i].toFixed(1)+'%';return fmtK(buckets[i])+(i<7?' ('+(totalCarteira>0?(buckets[i]/totalCarteira*100).toFixed(1):0)+'% da carteira)':'')}}}},
+      scales:{
+        x:{ticks:{color:'#94a3b8'},grid:{display:false}},
+        y:{position:'left',title:{display:true,text:'R$ recuperado/em aberto',color:'#94a3b8',font:{size:11}},ticks:{color:'#94a3b8',callback:v=>fmtK(v)},grid:{color:'rgba(255,255,255,.04)'}},
+        y2:{position:'right',min:0,max:100,title:{display:true,text:'% recuperado da carteira vencida',color:'#4A90FF',font:{size:11}},ticks:{color:'#4A90FF',callback:v=>v+'%'},grid:{display:false}}
+      }
+    }
+  });
 }
 
 function setCobrancaLinha(cat,el){
