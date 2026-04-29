@@ -1,12 +1,14 @@
 # Dashboard Etiquetei — Claude Code Reference
 
-Referência operacional curta para trabalhar no `dashboard-etiquetei`. Contexto histórico detalhado fica no Obsidian.
+Referência operacional curta para trabalhar no `dashboard-etiquetei`. Contexto histórico detalhado fica no Obsidian e coordenação de tarefas fica em `claude-handoff/`.
 
 ## Antes de Alterar
 
 Leia silenciosamente quando a tarefa tocar regra de negócio, segurança, deploy ou arquitetura:
 
 ```bash
+cat claude-handoff/CURRENT_STATE.md
+cat claude-handoff/WORKFLOW.md
 cat ~/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/Software\ e\ Projetos/Aprendizados\ Técnicos.md
 cat ~/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/Software\ e\ Projetos/Dashboard\ Omie/00\ -\ Visão\ Geral.md
 cat ~/Library/Mobile\ Documents/iCloud~md~obsidian/Documents/Software\ e\ Projetos/Dashboard\ Omie/10\ -\ Lógica\ de\ Negócio.md
@@ -150,16 +152,6 @@ BigQuery:
 
 ## Status Atual
 
-Concluído até 24/04/2026:
-- Reformulação CFO-grade: DRE, Geografia, MRR Bridge, Projeção 90d, default YTD
-- Pós-reformulação: choropleth, bubble map, YoY prioritário, cohort retention, aging, PDF com DRE, tendência de MRR
-- Correções críticas: `1.01.99` e status `90/99`
-- Testes: `test_api.py` e `test_pipeline.py` adaptados para Etiquetei; offline sem BQ/rede, online via `RUN_BQ_TESTS=1`; `83 tests`, `68 pass`, `15 skipped`
+O status vivo de branches, PRs, specs e proximas tarefas fica em `claude-handoff/CURRENT_STATE.md` e `claude-handoff/BACKLOG.md`.
 
-Pendências:
-- Identidade visual Etiquetei
-- Completar YoY nos gráficos mensais restantes
-- Cobrança: curva de recuperação
-- Quick Ratio
-- Validar 2 contratos "saindo em Abril" (R$ 554)
-- Validar exclusões `1.04.04-06`, `1.04.95`, `1.04.99`
+Nao use esta secao como backlog. Ela existe apenas para apontar para a documentacao de handoff mais atual.
