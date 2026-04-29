@@ -4,21 +4,13 @@ Atualizado em: 2026-04-29
 
 ## Imediato
 
-1. Mergear PR #4.
+1. Mergear o PR de docs `docs/handoff-after-pr4` (atualizacao deste CURRENT_STATE/BACKLOG apos merge do PR #4). Sem urgencia tecnica; e housekeeping.
 
-PR:
+2. Depois disso, escolher a proxima tarefa recomendada (abaixo).
 
-- `#4 feat: análise mensal de despesas de marketing`
-- Branch: `feat/analise-marketing`
-- Conteudo: spec 003, bloco de despesas de marketing na aba Resultado
+## Concluido recentemente
 
-2. Depois do merge, sincronizar `main` local.
-
-```bash
-git fetch origin --prune
-git switch main
-git pull --ff-only
-```
+- PR #4 (`feat: análise mensal de despesas de marketing`) mergeado em `main` via merge commit `824a238` (mergedAt `2026-04-29T21:47:26Z`). O bloco de Marketing ja esta em producao (GitHub Pages atualiza no push para `main`).
 
 ## Proxima tarefa recomendada
 
